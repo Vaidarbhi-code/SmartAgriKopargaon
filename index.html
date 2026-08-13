@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>SmartAgri Kopargaon</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ================= HEADER ================= -->
+
+    <header>
+
+        <div class="logo">
+
+            <div class="logo-icon">
+
+                <svg
+                    viewBox="0 0 70 70"
+                    aria-label="SmartAgri logo"
+                >
+
+                    <path
+                        d="M18 58 C20 45, 23 30, 30 14"
+                        fill="none"
+                        stroke="#465A32"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                    />
+
+                    <ellipse
+                        cx="25"
+                        cy="40"
+                        rx="4"
+                        ry="2.5"
+                        fill="#465A32"
+                        transform="rotate(-35 25 40)"
+                    />
+
+                    <ellipse
+                        cx="27"
+                        cy="34"
+                        rx="4"
+                        ry="2.5"
+                        fill="#465A32"
+                        transform="rotate(-35 27 34)"
+                    />
+
+                    <ellipse
+                        cx="29"
+                        cy="28"
+                        rx="4"
+                        ry="2.5"
+                        fill="#465A32"
+                        transform="rotate(-35 29 28)"
+                    />
+
+                    <ellipse
+                        cx="31"
+                        cy="22"
+                        rx="4"
+                        ry="2.5"
+                        fill="#465A32"
+                        transform="rotate(-35 31 22)"
+                    />
+
+                    <polyline
+                        points="17,53 29,45 40,38 51,27 62,15"
+                        fill="none"
+                        stroke="#F6C445"
+                        stroke-width="4"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+
+                    <circle
+                        cx="17"
+                        cy="53"
+                        r="3"
+                        fill="#F6C445"
+                    />
+
+                    <circle
+                        cx="29"
+                        cy="45"
+                        r="3"
+                        fill="#F6C445"
+                    />
+
+                    <circle
+                        cx="40"
+                        cy="38"
+                        r="3"
+                        fill="#F6C445"
+                    />
+
+                    <circle
+                        cx="51"
+                        cy="27"
+                        r="3"
+                        fill="#F6C445"
+                    />
+
+                    <circle
+                        cx="62"
+                        cy="15"
+                        r="3"
+                        fill="#F6C445"
+                    />
+
+                </svg>
+
+            </div>
+
+            <span>SmartAgri</span>
+
+        </div>
+
+
+        <div class="location">
+            📍 Kopargaon
+        </div>
+
+
+        <div class="language">
+
+            <select id="languageSelect">
+
+                <option value="en">
+                    English
+                </option>
+
+                <option value="mr">
+                    मराठी
+                </option>
+
+                <option value="hi">
+                    हिंदी
+                </option>
+
+            </select>
+
+        </div>
+
+    </header>
+
+
+    <!-- ================= NAVIGATION ================= -->
+
+    <nav>
+
+        <a href="#dashboard">
+            Dashboard
+        </a>
+
+        <a href="#market">
+            Market
+        </a>
+
+        <a href="#forecast">
+            Forecast
+        </a>
+
+        <a href="#decision">
+            Smart Decision
+        </a>
+
+    </nav>
+
+
+    <!-- ================= MAIN ================= -->
+
+    <main>
+
+
+        <!-- ================= HERO ================= -->
+
+        <section id="dashboard">
+
+            <div class="hero-content">
+
+                <span class="hero-label">
+                    DATA-DRIVEN AGRICULTURE
+                </span>
+
+                <h1>
+                    Smarter Market Decisions.
+                    <span>Better Farm Returns.</span>
+                </h1>
+
+                <p>
+                    Agricultural market intelligence designed
+                    to help farmers in Kopargaon decide
+                    when, where and how to sell their produce.
+                </p>
+
+                <div class="hero-tags">
+
+                    <span>
+                        📊 Market Intelligence
+                    </span>
+
+                    <span>
+                        🤖 AI Forecasting
+                    </span>
+
+                    <span>
+                        📡 Live Data
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= CROP SELECTION ================= -->
+
+        <section id="crop-selection">
+
+            <div class="section-heading">
+
+                <div class="section-icon">
+                    🌱
+                </div>
+
+                <div>
+
+                    <h2>
+                        Select Your Crop
+                    </h2>
+
+                    <p>
+                        Select a crop to analyze current
+                        live market conditions in Kopargaon.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="input-grid">
+
+
+                <!-- CROP -->
+
+                <div class="input-group">
+
+                    <label for="crop">
+                        Crop
+                    </label>
+
+                    <select id="crop">
+
+                        <option value="onion">
+                            🧅 Onion
+                        </option>
+
+                        <option value="wheat">
+                            🌾 Wheat
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- ANALYZE BUTTON -->
+
+                <div class="analyze-wrapper">
+
+                    <button
+                        id="analyzeButton"
+                        type="button"
+                    >
+
+                        Analyze Market
+
+                        <span>
+                            →
+                        </span>
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= MARKET OVERVIEW ================= -->
+
+        <section id="market">
+
+            <div class="section-heading">
+
+                <div class="section-icon blue-icon">
+                    📊
+                </div>
+
+                <div>
+
+                    <h2>
+                        Market Snapshot
+                    </h2>
+
+                    <p>
+                        Current live market conditions
+                        for the selected crop.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="market-cards">
+
+
+                <!-- CURRENT PRICE -->
+
+                <div class="card">
+
+                    <div class="card-icon">
+                        ₹
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Current Price
+                        </h3>
+
+                        <p id="currentPrice">
+                            --
+                        </p>
+
+                        <span class="card-description">
+                            Per Quintal
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <!-- MARKET TREND -->
+
+                <div class="card">
+
+                    <div class="card-icon trend-icon">
+                        ↗
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Market Trend
+                        </h3>
+
+                        <p id="marketTrend">
+                            --
+                        </p>
+
+                        <span class="card-description">
+                            Price movement
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <!-- DEMAND -->
+
+                <div class="card">
+
+                    <div class="card-icon demand-icon">
+                        🔥
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Demand
+                        </h3>
+
+                        <p id="demand">
+                            --
+                        </p>
+
+                        <span class="card-description">
+                            Current market indicator
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= FORECAST ================= -->
+
+        <section id="forecast">
+
+            <div class="section-heading">
+
+                <div class="section-icon">
+                    🤖
+                </div>
+
+                <div>
+
+                    <h2>
+                        AI Price Forecast
+                    </h2>
+
+                    <p>
+                        Estimated future price based on
+                        current market information.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="forecast-box">
+
+                <div>
+
+                    <span class="forecast-label">
+                        EXPECTED FUTURE PRICE
+                    </span>
+
+                    <h3 id="forecastPrice">
+                        --
+                    </h3>
+
+                    <p id="forecastMessage">
+                        Select a crop and analyze the market
+                        to generate a forecast.
+                    </p>
+
+                </div>
+
+
+                <div class="forecast-visual">
+                    📈
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= MARKET COMPARISON ================= -->
+
+        <section id="market-comparison">
+
+            <div class="section-heading">
+
+                <div class="section-icon green-icon">
+                    🏪
+                </div>
+
+                <div>
+
+                    <h2>
+                        Market Comparison
+                    </h2>
+
+                    <p>
+                        Live Kopargaon market information.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-container">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Market
+                            </th>
+
+                            <th>
+                                Price / Quintal
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="marketTable">
+
+                        <tr>
+
+                            <td>
+                                📍 Kopargaon APMC
+                            </td>
+
+                            <td>
+                                --
+                            </td>
+
+                            <td>
+                                Waiting
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= SMART DECISION ================= -->
+
+        <section id="decision">
+
+            <div class="section-heading">
+
+                <div class="section-icon olive-icon">
+                    🧠
+                </div>
+
+                <div>
+
+                    <h2>
+                        Smart Selling Decision
+                    </h2>
+
+                    <p>
+                        Compare possible selling strategies
+                        using current market information.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="decision-options">
+
+
+                <!-- SELL -->
+
+                <div class="decision-card">
+
+                    <div class="decision-icon sell-icon">
+                        💰
+                    </div>
+
+                    <h3>
+                        Sell Now
+                    </h3>
+
+                    <p>
+                        Current Price
+                    </p>
+
+                    <strong id="sellReturn">
+                        --
+                    </strong>
+
+                </div>
+
+
+                <!-- STORE -->
+
+                <div class="decision-card">
+
+                    <div class="decision-icon store-icon">
+                        📦
+                    </div>
+
+                    <h3>
+                        Store
+                    </h3>
+
+                    <p>
+                        Estimated Future Price
+                    </p>
+
+                    <strong id="storeReturn">
+                        --
+                    </strong>
+
+                </div>
+
+
+                <!-- TRANSPORT -->
+
+                <div class="decision-card">
+
+                    <div class="decision-icon transport-icon">
+                        🚚
+                    </div>
+
+                    <h3>
+                        Transport
+                    </h3>
+
+                    <p>
+                        Estimated Price
+                    </p>
+
+                    <strong id="transportReturn">
+                        --
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- ================= RECOMMENDATION ================= -->
+
+            <div id="recommendation">
+
+                <div class="recommendation-icon">
+                    🏆
+                </div>
+
+                <div>
+
+                    <span class="recommendation-label">
+                        SMART RECOMMENDATION
+                    </span>
+
+                    <h2>
+                        Recommended Action
+                    </h2>
+
+                    <h3 id="bestAction">
+                        Analyze the market
+                    </h3>
+
+                    <p id="recommendationReason">
+                        The system will analyze live market
+                        data and provide a recommendation.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= CONNECTION STATUS ================= -->
+
+        <section id="offline-status">
+
+            <div class="offline-content">
+
+                <div class="offline-icon">
+                    📡
+                </div>
+
+                <div>
+
+                    <h2>
+                        Live Data Connection
+                    </h2>
+
+                    <p id="connectionStatus">
+                        Ready to connect to live market data.
+                    </p>
+
+                    <span>
+                        Market prices are retrieved through
+                        the SmartAgri backend from
+                        data.gov.in / Agmarknet.
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- ================= FOOTER ================= -->
+
+    <footer>
+
+        <div class="footer-logo">
+            🌾 SmartAgri Kopargaon
+        </div>
+
+        <p>
+            Live Market Data • Multilingual • Mobile-friendly
+        </p>
+
+        <p class="copyright">
+            Smart Agriculture Market Intelligence System
+        </p>
+
+    </footer>
+
+
+    <!-- ================= JAVASCRIPT ================= -->
+
+    <!--
+        IMPORTANT:
+        Only script.js is loaded here.
+
+        server.js runs separately in Command Prompt.
+    -->
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
