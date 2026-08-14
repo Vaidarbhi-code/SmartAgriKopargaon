@@ -18,6 +18,8 @@ CROP_URLS = {
     "wheat": "/commodity-agri-market/maharashtra/wheat/kopargaon",
 }
 
+SUPPORTED_CROPS = {"onion", "wheat"}
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -32,11 +34,9 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
-
-SUPPORTED_CROPS = {
-    "onion",
-    "wheat",
-}
+DEFAULT_MARKET = "Kopargaon"
+DEFAULT_DISTRICT = "Ahilyanagar"
+DEFAULT_STATE = "Maharashtra"
 
 
 # ============================================================
@@ -55,6 +55,14 @@ def clean_text(value):
 
 
 def parse_price(value):
+    """
+    Convert strings such as:
+        ₹2,500
+        Rs 2500
+        2500 / quintal
+
+    into float.
+    """
     if value is None:
         return None
 
@@ -68,10 +76,7 @@ def parse_price(value):
         .replace("Rs", "")
     )
 
-    match = re.search(
-        r"\d+(?:\.\d+)?",
-        text
-    )
+    match = re.search(r"\d+(?:\.\d+)?", text)
 
     if not match:
         return None
@@ -83,6 +88,10 @@ def parse_price(value):
 
 
 def parse_date(value):
+    """
+    Convert supported date formats to YYYY-MM-DD.
+    """
+
     if not value:
         return None
 
@@ -124,42 +133,12 @@ def parse_date(value):
                 "%d %b %Y"
             )
 
-            return parsed.strftime(
-                "%Y-%m-%d"
-            )
+            return parsed.strftime("%Y-%m-%d")
 
         except ValueError:
             pass
 
     return None
-
-
-# ============================================================
-# HTTP
-# ============================================================
-
-def fetch_page(crop):
-    crop = crop.lower().strip()
-
-    if crop not in SUPPORTED_CROPS:
-        raise ValueError(
-            f"Unsupported crop: {crop}"
-        )
-
-    url = urljoin(
-        BASE_URL,
-        CROP_URLS[crop]
-    )
-
-    response = requests.get(
-        url,
-        headers=HEADERS,
-        timeout=30
-    )
-
-    response.raise_for_status()
-
-    return response.text, url
 
 
 # ============================================================
@@ -187,9 +166,7 @@ def normalize_header(value):
 def find_column_index(headers, patterns):
     for index, header in enumerate(headers):
 
-        normalized = normalize_header(
-            header
-        )
+        normalized = normalize_header(header)
 
         for pattern in patterns:
 
@@ -200,10 +177,152 @@ def find_column_index(headers, patterns):
 
 
 # ============================================================
+# HTTP
+# ============================================================
+
+def fetch_page(crop):
+    crop = crop.lower().strip()
+
+    if crop not in SUPPORTED_CROPS:
+        raise ValueError(
+            f"Unsupported crop: {crop}. "
+            f"Supported crops: {sorted(SUPPORTED_CROPS)}"
+        )
+
+    url = urljoin(
+        BASE_URL,
+        CROP_URLS[crop]
+    )
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.text, url
+
+
+# ============================================================
+# RECORD NORMALIZATION
+# ============================================================
+
+def normalize_record(record, crop, source_url):
+    """
+    Ensure every record has the fields required by MongoDB.
+
+    IMPORTANT:
+    crop, market and data_date must never be None.
+    """
+
+    crop = clean_text(crop).lower()
+
+    market = clean_text(
+        record.get("market")
+    ) or DEFAULT_MARKET
+
+    district = clean_text(
+        record.get("district")
+    ) or DEFAULT_DISTRICT
+
+    commodity = clean_text(
+        record.get("commodity")
+    ) or crop.title()
+
+    variety = clean_text(
+        record.get("variety")
+    )
+
+    grade = clean_text(
+        record.get("grade")
+    )
+
+    data_date = record.get("data_date")
+
+    if data_date:
+        data_date = parse_date(
+            data_date
+        )
+
+    if not data_date:
+        return None
+
+    modal_price = record.get("modal_price")
+
+    if modal_price is None:
+        modal_price = record.get("price")
+
+    if modal_price is not None:
+        try:
+            modal_price = float(modal_price)
+        except (TypeError, ValueError):
+            modal_price = None
+
+    min_price = record.get("min_price")
+
+    if min_price is not None:
+        try:
+            min_price = float(min_price)
+        except (TypeError, ValueError):
+            min_price = None
+
+    max_price = record.get("max_price")
+
+    if max_price is not None:
+        try:
+            max_price = float(max_price)
+        except (TypeError, ValueError):
+            max_price = None
+
+    # A market-price record must have at least one usable price.
+    if (
+        modal_price is None
+        and min_price is None
+        and max_price is None
+    ):
+        return None
+
+    if modal_price is None:
+
+        candidates = [
+            value
+            for value in (
+                min_price,
+                max_price,
+            )
+            if value is not None
+        ]
+
+        if candidates:
+            modal_price = sum(candidates) / len(candidates)
+
+    return {
+        "crop": crop,
+        "market": market,
+        "district": district,
+        "state": DEFAULT_STATE,
+        "commodity": commodity,
+        "variety": variety,
+        "grade": grade,
+        "min_price": min_price,
+        "max_price": max_price,
+        "modal_price": modal_price,
+        "price": modal_price,
+        "data_date": data_date,
+        "source": "NaPanta",
+        "source_name": "NaPanta",
+        "source_url": source_url,
+    }
+
+
+# ============================================================
 # TABLE PARSER
 # ============================================================
 
 def parse_table(table, crop, source_url):
+
     rows = table.find_all("tr")
 
     if not rows:
@@ -223,22 +342,17 @@ def parse_table(table, crop, source_url):
         for cell in header_cells
     ]
 
-    normalized_headers = [
-        normalize_header(header)
-        for header in headers
-    ]
-
     date_index = find_column_index(
-        normalized_headers,
+        headers,
         [
-            "date",
             "arrival date",
+            "date",
             "arrival",
         ]
     )
 
     market_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "market",
             "mandi",
@@ -246,14 +360,14 @@ def parse_table(table, crop, source_url):
     )
 
     district_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "district",
         ]
     )
 
     commodity_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "commodity",
             "crop",
@@ -261,21 +375,21 @@ def parse_table(table, crop, source_url):
     )
 
     variety_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "variety",
         ]
     )
 
     grade_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "grade",
         ]
     )
 
     max_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "maximum price",
             "max price",
@@ -285,7 +399,7 @@ def parse_table(table, crop, source_url):
     )
 
     avg_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "average price",
             "avg price",
@@ -296,7 +410,7 @@ def parse_table(table, crop, source_url):
     )
 
     min_index = find_column_index(
-        normalized_headers,
+        headers,
         [
             "minimum price",
             "min price",
@@ -326,28 +440,12 @@ def parse_table(table, crop, source_url):
         if not values:
             continue
 
-        row_text = " ".join(
-            values
-        )
-
+        row_text = " ".join(values)
         row_lower = row_text.lower()
 
-        # We only want Kopargaon records.
-        if (
-            "kopargaon"
-            not in row_lower
-        ):
+        # Only Kopargaon records.
+        if "kopargaon" not in row_lower:
             continue
-
-        # Verify crop where possible.
-        if (
-            crop.lower()
-            not in row_lower
-        ):
-            # Some tables omit commodity from
-            # individual rows. That is acceptable
-            # when the page itself is crop-specific.
-            pass
 
         def get_value(index):
             if (
@@ -370,49 +468,35 @@ def parse_table(table, crop, source_url):
                 get_value(date_index)
             )
 
+        # Try every cell if header detection failed.
         if data_date is None:
 
             for value in values:
 
-                possible_date = parse_date(
-                    value
-                )
+                possible_date = parse_date(value)
 
                 if possible_date:
                     data_date = possible_date
                     break
 
-        # Without a date this record is not useful
-        # for our historical MongoDB dataset.
         if data_date is None:
             continue
 
         # ----------------------------------------------------
-        # MARKET
+        # BASIC FIELDS
         # ----------------------------------------------------
 
         market = (
             get_value(market_index)
             if market_index is not None
-            else "Kopargaon"
+            else DEFAULT_MARKET
         )
-
-        if not market:
-            market = "Kopargaon"
-
-        # ----------------------------------------------------
-        # DISTRICT
-        # ----------------------------------------------------
 
         district = (
             get_value(district_index)
             if district_index is not None
-            else "Ahilyanagar"
+            else DEFAULT_DISTRICT
         )
-
-        # ----------------------------------------------------
-        # COMMODITY
-        # ----------------------------------------------------
 
         commodity = (
             get_value(commodity_index)
@@ -420,22 +504,11 @@ def parse_table(table, crop, source_url):
             else crop.title()
         )
 
-        if not commodity:
-            commodity = crop.title()
-
-        # ----------------------------------------------------
-        # VARIETY
-        # ----------------------------------------------------
-
         variety = (
             get_value(variety_index)
             if variety_index is not None
             else ""
         )
-
-        # ----------------------------------------------------
-        # GRADE
-        # ----------------------------------------------------
 
         grade = (
             get_value(grade_index)
@@ -452,16 +525,19 @@ def parse_table(table, crop, source_url):
         modal_price = None
 
         if min_index is not None:
+
             min_price = parse_price(
                 get_value(min_index)
             )
 
         if max_index is not None:
+
             max_price = parse_price(
                 get_value(max_index)
             )
 
         if avg_index is not None:
+
             modal_price = parse_price(
                 get_value(avg_index)
             )
@@ -488,14 +564,10 @@ def parse_table(table, crop, source_url):
                     or "quintal" in lower_value
                 ):
 
-                    price = parse_price(
-                        value
-                    )
+                    price = parse_price(value)
 
                     if price is not None:
-                        price_values.append(
-                            price
-                        )
+                        price_values.append(price)
 
             if len(price_values) >= 3:
 
@@ -503,11 +575,8 @@ def parse_table(table, crop, source_url):
                 #
                 # Maximum | Average | Minimum
                 #
-                # We use the last three detected
-                # price values.
-                fallback = (
-                    price_values[-3:]
-                )
+
+                fallback = price_values[-3:]
 
                 if max_price is None:
                     max_price = fallback[0]
@@ -518,65 +587,49 @@ def parse_table(table, crop, source_url):
                 if min_price is None:
                     min_price = fallback[2]
 
-        # Sometimes only the average/modal price
-        # is available.
+        # ----------------------------------------------------
+        # MODAL FALLBACK
+        # ----------------------------------------------------
+
         if modal_price is None:
 
             candidates = []
 
             for value in values:
 
-                price = parse_price(
-                    value
-                )
+                price = parse_price(value)
 
                 if price is not None:
-                    candidates.append(
-                        price
-                    )
+                    candidates.append(price)
 
             if candidates:
-
                 modal_price = candidates[-1]
 
         if modal_price is None:
             continue
 
-        # ----------------------------------------------------
-        # RECORD
-        # ----------------------------------------------------
-
-        record = {
+        raw_record = {
             "crop": crop,
-            "market": clean_text(
-                market
-            ),
-            "district": clean_text(
-                district
-            ),
-            "state": "Maharashtra",
-            "commodity": clean_text(
-                commodity
-            ),
-            "variety": clean_text(
-                variety
-            ),
-            "grade": clean_text(
-                grade
-            ),
+            "market": market,
+            "district": district,
+            "commodity": commodity,
+            "variety": variety,
+            "grade": grade,
             "min_price": min_price,
             "max_price": max_price,
             "modal_price": modal_price,
             "price": modal_price,
             "data_date": data_date,
-            "source": "NaPanta",
-            "source_name": "NaPanta",
-            "source_url": source_url,
         }
 
-        records.append(
-            record
+        record = normalize_record(
+            raw_record,
+            crop,
+            source_url
         )
+
+        if record:
+            records.append(record)
 
     return records
 
@@ -590,6 +643,7 @@ def extract_summary_from_page(
     crop,
     source_url
 ):
+
     soup = BeautifulSoup(
         html,
         "html.parser"
@@ -641,8 +695,7 @@ def extract_summary_from_page(
         r"(?:Price updated|updated)"
         r"\s*:?\s*"
         r"(\d{1,2}\s+"
-        r"[A-Za-z]{3,9}"
-        r"\s+\d{4})",
+        r"[A-Za-z]{3,9}\s+\d{4})",
         text,
         re.IGNORECASE
     )
@@ -684,25 +737,30 @@ def extract_summary_from_page(
     ):
         return []
 
-    return [
-        {
-            "crop": crop,
-            "market": "Kopargaon",
-            "district": "Ahilyanagar",
-            "state": "Maharashtra",
-            "commodity": crop.title(),
-            "variety": "",
-            "grade": "",
-            "min_price": min_price,
-            "max_price": max_price,
-            "modal_price": modal_price,
-            "price": modal_price,
-            "data_date": data_date,
-            "source": "NaPanta",
-            "source_name": "NaPanta",
-            "source_url": source_url,
-        }
-    ]
+    raw_record = {
+        "crop": crop,
+        "market": DEFAULT_MARKET,
+        "district": DEFAULT_DISTRICT,
+        "commodity": crop.title(),
+        "variety": "",
+        "grade": "",
+        "min_price": min_price,
+        "max_price": max_price,
+        "modal_price": modal_price,
+        "price": modal_price,
+        "data_date": data_date,
+    }
+
+    record = normalize_record(
+        raw_record,
+        crop,
+        source_url
+    )
+
+    if not record:
+        return []
+
+    return [record]
 
 
 # ============================================================
@@ -710,22 +768,42 @@ def extract_summary_from_page(
 # ============================================================
 
 def deduplicate_records(records):
+    """
+    Deduplicate using the same logical key that MongoDB
+    should use for market prices:
+
+        crop + market + data_date + variety
+    """
+
     unique = {}
 
     for record in records:
 
+        crop = record.get("crop")
+        market = record.get("market")
+        data_date = record.get("data_date")
+        variety = record.get("variety", "")
+
+        # Never allow invalid MongoDB keys.
+        if not crop:
+            continue
+
+        if not market:
+            continue
+
+        if not data_date:
+            continue
+
         key = (
-            record.get("crop", ""),
-            record.get("market", ""),
-            record.get("data_date", ""),
-            record.get("variety", ""),
+            crop,
+            market,
+            data_date,
+            variety,
         )
 
         unique[key] = record
 
-    return list(
-        unique.values()
-    )
+    return list(unique.values())
 
 
 # ============================================================
@@ -737,6 +815,7 @@ def extract_daily_records(
     crop,
     source_url
 ):
+
     soup = BeautifulSoup(
         html,
         "html.parser"
@@ -748,9 +827,7 @@ def extract_daily_records(
     # TABLES
     # --------------------------------------------------------
 
-    for table in soup.find_all(
-        "table"
-    ):
+    for table in soup.find_all("table"):
 
         try:
 
@@ -781,24 +858,20 @@ def extract_daily_records(
 
     if not records:
 
-        records = (
-            extract_summary_from_page(
-                html,
-                crop,
-                source_url
-            )
+        records = extract_summary_from_page(
+            html,
+            crop,
+            source_url
         )
 
     records = deduplicate_records(
         records
     )
 
+    # Newest first.
     records.sort(
         key=lambda item: (
-            item.get(
-                "data_date"
-            )
-            or ""
+            item.get("data_date") or ""
         ),
         reverse=True
     )
@@ -812,7 +885,7 @@ def extract_daily_records(
 
 def scrape_crop(crop):
     """
-    Scrape all available daily records for one crop.
+    Scrape daily market prices for one crop.
 
     Supported:
         onion
@@ -849,36 +922,35 @@ def scrape_crop(crop):
 
     print(
         f"{crop}: extracted "
-        f"{len(records)} daily records."
+        f"{len(records)} records"
     )
 
-    if records:
-
-        print(
-            f"{crop}: latest date = "
-            f"{records[0].get('data_date')}"
-        )
+    print(
+        f"{crop}: latest date = "
+        f"{records[0].get('data_date')}"
+    )
 
     return records
 
 
 def scrape_all():
     """
-    Scrape all supported crops.
+    Scrape both supported crops.
 
     Returns:
-        {
-            "onion": [...],
-            "wheat": [...]
-        }
+
+    {
+        "onion": [...],
+        "wheat": [...]
+    }
     """
 
     results = {}
 
-    for crop in [
+    for crop in (
         "onion",
         "wheat",
-    ]:
+    ):
 
         try:
 
@@ -905,12 +977,8 @@ def scrape_all():
 if __name__ == "__main__":
 
     print("=" * 70)
-    print(
-        "SmartAgri Kopargaon"
-    )
-    print(
-        "NaPanta Daily Market Scraper"
-    )
+    print("SmartAgri Kopargaon")
+    print("NaPanta Daily Market Price Scraper")
     print("=" * 70)
 
     results = scrape_all()
@@ -924,10 +992,7 @@ if __name__ == "__main__":
         )
 
         for record in records[:10]:
-
-            print(
-                record
-            )
+            print(record)
 
     print()
     print("=" * 70)
