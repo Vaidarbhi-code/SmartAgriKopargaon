@@ -1,6 +1,8 @@
 Flask
 flask-cors
+pymongo[srv]
+dnspython
 requests
-pymongo
-gunicorn
 beautifulsoup4
+gunicorn
+certifi
