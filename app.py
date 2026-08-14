@@ -394,31 +394,28 @@ def get_last_scraped(crop):
 def refresh_crop(crop):
 
     print(
-        f"Fetching Agmarknet data for {crop}..."
+        f"Refreshing market data for {crop}..."
     )
 
-    records = scrape_crop(
-        crop
-    )
+    record = scrape_crop(crop)
 
-    if not records:
-
+    if not record:
         raise RuntimeError(
-            f"Agmarknet returned no records for {crop}."
+            f"No market data returned for {crop}"
         )
 
-    database_result = save_records(
-        records
-    )
+    # scraper.py returns one dictionary,
+    # while save_records() expects a list.
+    records = [record]
 
-    latest = get_latest_record(
-        crop
-    )
+    result = save_records(records)
+
+    latest = get_latest_record(crop)
 
     return {
         "crop": crop,
         "scraped_records": len(records),
-        "database": database_result,
+        "database": result,
         "latest": latest,
     }
 
