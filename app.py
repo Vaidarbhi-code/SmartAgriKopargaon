@@ -12,7 +12,12 @@ from flask_cors import CORS
 # COMPLETE FLASK BACKEND
 # ============================================================
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=".",
+    static_folder=".",
+    static_url_path=""
+)
 CORS(app)
 
 
