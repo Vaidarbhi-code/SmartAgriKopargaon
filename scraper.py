@@ -1,153 +1,223 @@
-import os
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-CEDA_API_URL = "https://agmarknet.ceda.ashoka.edu.in/api/prices"
+# ============================================================
+# SMARTAGRI AGMARKNET SCRAPER
+# ============================================================
 
-CEDA_API_KEY = os.getenv("CEDA_API_KEY")
+API_URL = "https://agmarknet.ceda.ashoka.edu.in/api/prices"
 
 
-CROPS = {
-    "onion": "Onion",
-    "wheat": "Wheat"
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 "
+        "(Windows NT 10.0; Win64; x64) "
+        "Chrome/151 Safari/537.36"
+    ),
+    "Accept": "application/json",
 }
 
 
-def get_headers():
-    """
-    CEDA API authentication.
-    """
-
-    headers = {
-        "Accept": "application/json"
-    }
-
-    if CEDA_API_KEY:
-        headers["Authorization"] = f"Bearer {CEDA_API_KEY}"
-
-    return headers
+SUPPORTED_CROPS = {
+    "onion": "Onion",
+    "wheat": "Wheat",
+}
 
 
+# ============================================================
+# FETCH API
+# ============================================================
 
-def fetch_ceda_prices(crop):
-
-    params = {
-        "cmdty": CROPS[crop]
-    }
-
+def fetch_prices():
 
     response = requests.get(
-        CEDA_API_URL,
-        headers=get_headers(),
-        params=params,
-        timeout=30
+        API_URL,
+        headers=HEADERS,
+        timeout=20
     )
 
-
     response.raise_for_status()
-
 
     return response.json()
 
 
 
-def parse_latest_price(crop):
+# ============================================================
+# CLEAN NUMBER
+# ============================================================
 
-    data = fetch_ceda_prices(crop)
+def clean_price(value):
+
+    if value is None:
+        return None
+
+    try:
+        return round(float(value))
+    except Exception:
+        return None
 
 
-    records = data.get(
-        "data",
-        []
-    )
+
+# ============================================================
+# PARSE API DATA
+# ============================================================
+
+def parse_records(data, crop):
+
+    records = []
+
+    commodity_name = SUPPORTED_CROPS[crop]
 
 
-    if not records:
-        raise Exception(
-            f"No CEDA data found for {crop}"
+    for item in data.get("data", []):
+
+        cmdty = (
+            item.get("cmdty")
+            or ""
         )
 
 
-    # API returns newest first
-    latest = records[0]
+        if cmdty.lower() != commodity_name.lower():
+
+            continue
 
 
-    return {
+        record = {
 
-        "crop": crop,
+            "crop": crop,
 
-        "commodity": latest.get(
-            "cmdty"
-        ),
-
-        "market": "Kopargaon",
-
-        "state": latest.get(
-            "state",
-            "Maharashtra"
-        ),
-
-        "district": latest.get(
-            "district",
-            "Ahmadnagar"
-        ),
+            "commodity": cmdty,
 
 
-        "data_date": latest.get(
-            "t"
-        ),
+            "district":
+                item.get(
+                    "district",
+                    ""
+                ),
 
 
-        "min_price": latest.get(
-            "p_min"
-        ),
-
-        "max_price": latest.get(
-            "p_max"
-        ),
-
-        "modal_price": latest.get(
-            "p_modal"
-        ),
-
-        "price": latest.get(
-            "p_modal"
-        ),
+            "state":
+                item.get(
+                    "state",
+                    ""
+                ),
 
 
-        "source": "CEDA Agmarknet",
-
-        "source_url": CEDA_API_URL,
-
-        "updated_at": datetime.utcnow()
-
-    }
+            "market":
+                item.get(
+                    "district",
+                    "Kopargaon"
+                ),
 
 
+            "data_date":
+                item.get(
+                    "t"
+                ),
+
+
+            "min_price":
+                clean_price(
+                    item.get(
+                        "p_min"
+                    )
+                ),
+
+
+            "max_price":
+                clean_price(
+                    item.get(
+                        "p_max"
+                    )
+                ),
+
+
+            "modal_price":
+                clean_price(
+                    item.get(
+                        "p_modal"
+                    )
+                ),
+
+
+            "price":
+                clean_price(
+                    item.get(
+                        "p_modal"
+                    )
+                ),
+
+
+            "source":
+                "Agmarknet CEDA API",
+
+
+            "source_url":
+                API_URL,
+
+
+            "scraped_at":
+                datetime.now(
+                    timezone.utc
+                )
+
+        }
+
+
+        records.append(record)
+
+
+    return records
+
+
+
+# ============================================================
+# MAIN FUNCTION USED BY APP.PY
+# ============================================================
 
 def scrape_crop(crop):
 
-    crop = crop.lower()
+    crop = crop.lower().strip()
 
-    if crop not in CROPS:
+
+    if crop not in SUPPORTED_CROPS:
+
         raise ValueError(
             "Supported crops: onion, wheat"
         )
 
 
-    return parse_latest_price(
+    api_response = fetch_prices()
+
+
+    records = parse_records(
+        api_response,
         crop
     )
 
 
+    if not records:
+
+        raise RuntimeError(
+            f"No Agmarknet data found for {crop}"
+        )
+
+
+    return records
+
+
+
+# ============================================================
+# SCRAPE ALL
+# ============================================================
 
 def scrape_all():
 
     result = {}
 
 
-    for crop in CROPS:
+    for crop in SUPPORTED_CROPS:
 
         try:
 
@@ -155,17 +225,11 @@ def scrape_all():
                 crop
             )
 
-
-        except Exception as error:
+        except Exception as e:
 
             result[crop] = {
-
-                "crop": crop,
-
                 "success": False,
-
-                "error": str(error)
-
+                "error": str(e)
             }
 
 
@@ -173,24 +237,37 @@ def scrape_all():
 
 
 
+# ============================================================
+# TEST
+# ============================================================
+
 if __name__ == "__main__":
 
 
     print(
-        "SmartAgri CEDA Scraper"
+        "SmartAgri Agmarknet Scraper"
     )
 
 
-    data = scrape_all()
+    output = scrape_all()
 
 
-    for crop, value in data.items():
+    for crop, records in output.items():
 
         print("\n")
         print(
             crop.upper()
         )
 
-        print(
-            value
-        )
+
+        if isinstance(records, list):
+
+            for r in records:
+
+                print(
+                    r
+                )
+
+        else:
+
+            print(records)
