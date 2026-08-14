@@ -12,17 +12,37 @@ from datetime import datetime, timezone
 # SMARTAGRI KOPARGAON
 # ============================================================
 #
-# GOVERNMENT OGD / AGMARKNET API
+# GOVERNMENT OGD / AGMARKNET VERSION
 #
-# - No Mandipulse scraping
-# - No hardcoded prices
-# - No fake fallback prices
-# - SQLite historical database
-# - Live government market data
-# - Historical prices
-# - Trend detection
-# - Moving averages
-# - Short-term estimate
+# Source:
+# Government of India Open Government Data
+# AGMARKNET market-price dataset
+#
+# NO MANDIPULSE
+# NO HARDCODED PRICES
+# NO FAKE PRICES
+#
+# The backend:
+#
+# 1. Requests government market data
+# 2. Searches commodity records
+# 3. Matches Kopargaon using flexible names
+# 4. Stores successful government records
+# 5. Maintains SQLite history
+# 6. Calculates trend
+# 7. Calculates moving averages
+# 8. Calculates a simple short-term estimate
+#
+# Supported:
+#   onion
+#   wheat
+#
+# API:
+#   /api/health
+#   /api/market?crop=onion
+#   /api/market?crop=wheat
+#   /api/collect?crop=onion
+#   /api/history?crop=onion
 #
 # ============================================================
 
@@ -68,7 +88,6 @@ def get_db_connection():
 def init_database():
 
     connection = get_db_connection()
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -132,11 +151,11 @@ def init_database():
     connection.commit()
     connection.close()
 
-    print("=" * 60)
-    print("DATABASE READY")
-    print("=" * 60)
+    print("=" * 70)
+    print("SMARTAGRI DATABASE READY")
+    print("=" * 70)
     print("Database:", DATABASE_PATH)
-    print("=" * 60)
+    print("=" * 70)
 
 
 init_database()
@@ -152,14 +171,57 @@ DISTRICT = "Ahilyanagar"
 
 STATE = "Maharashtra"
 
+
+# ------------------------------------------------------------
+# Important:
+#
+# Government data may use different names for the same place.
+#
+# Examples that may occur:
+#
+# Kopargaon
+# Kopargaon APMC
+# Kopargaon (APMC)
+# Kopargaon Market
+# Kopargaon(Mandi)
+#
+# Therefore we DO NOT require an exact string match.
+# ------------------------------------------------------------
+
+MARKET_ALIASES = [
+    "kopargaon",
+    "kopargaon apmc",
+    "kopargaon market",
+    "kopargaon mandi",
+    "kopargaon(mandi)",
+    "kopargaon(apmc)"
+]
+
+
+DISTRICT_ALIASES = [
+    "ahilyanagar",
+    "ahmednagar",
+    "ahmadnagar",
+    "nagar"
+]
+
+
+STATE_ALIASES = [
+    "maharashtra"
+]
+
+
 CROP_NAMES = {
+
     "onion": "Onion",
+
     "wheat": "Wheat"
+
 }
 
 
 # ============================================================
-# GOVERNMENT OF INDIA OGD API
+# GOVERNMENT OGD API
 # ============================================================
 
 DATA_GOV_API_KEY = os.environ.get(
@@ -167,37 +229,43 @@ DATA_GOV_API_KEY = os.environ.get(
     ""
 ).strip()
 
+
 DATA_GOV_RESOURCE_ID = os.environ.get(
     "DATA_GOV_RESOURCE_ID",
     "9ef84268-d588-465a-a308-a864a43d0070"
 ).strip()
+
 
 DATA_GOV_API_URL = (
     "https://api.data.gov.in/resource/"
     + DATA_GOV_RESOURCE_ID
 )
 
+
 DATA_GOV_SOURCE_URL = (
     "https://www.data.gov.in/"
 )
 
+
+# ============================================================
+# REQUEST CONFIGURATION
+# ============================================================
+
 REQUEST_TIMEOUT = (
-    5,
+    8,
     15
 )
 
 
-# ============================================================
-# HTTP HEADERS
-# ============================================================
-
 HEADERS = {
 
     "User-Agent":
-        "SmartAgriKopargaon/1.0",
+        "SmartAgriKopargaon/2.0 "
+        "(Government OGD API Client)",
 
     "Accept":
         "application/json"
+
 }
 
 
@@ -215,27 +283,11 @@ def clean_text(value):
 
 def normalize_text(value):
 
-    text = clean_text(value)
+    text = clean_text(value).lower()
 
-    text = text.lower()
-
-    # Remove punctuation.
     text = re.sub(
         r"[^a-z0-9]+",
         " ",
-        text
-    )
-
-    # Remove common market suffixes.
-    text = re.sub(
-        r"\bapmc\b",
-        "",
-        text
-    )
-
-    text = re.sub(
-        r"\bmarket\b",
-        "",
         text
     )
 
@@ -243,17 +295,21 @@ def normalize_text(value):
         r"\s+",
         " ",
         text
-    )
+    ).strip()
 
-    return text.strip()
+    return text
 
+
+# ============================================================
+# NUMBER HELPERS
+# ============================================================
 
 def extract_number(value):
 
     if value is None:
         return None
 
-    text = clean_text(value)
+    text = str(value).strip()
 
     text = text.replace(
         ",",
@@ -295,7 +351,7 @@ def extract_number(value):
 
 
 # ============================================================
-# GOVERNMENT FIELD HELPERS
+# NORMALIZE API KEYS
 # ============================================================
 
 def normalize_key(key):
@@ -334,7 +390,9 @@ def get_field(
 
     for name in possible_names:
 
-        key = normalize_key(name)
+        key = normalize_key(
+            name
+        )
 
         if key in normalized:
 
@@ -370,6 +428,7 @@ def parse_date(value):
         "%d %B %Y",
 
         "%m/%d/%Y"
+
     ]
 
     for date_format in formats:
@@ -388,6 +447,9 @@ def parse_date(value):
         except ValueError:
 
             pass
+
+
+    # Try extracting a date from text.
 
     match = re.search(
         r"(\d{1,2})[/-]"
@@ -430,128 +492,162 @@ def parse_date(value):
 
 
 # ============================================================
-# MARKET MATCHING
+# LOCATION MATCHING
 # ============================================================
 
-def market_matches(value):
-
-    actual = normalize_text(
-        value
-    )
-
-    wanted = normalize_text(
-        MARKET_NAME
-    )
-
-    if not actual:
-        return False
-
-    if not wanted:
-        return False
-
-    # Exact normalized match.
-    if actual == wanted:
-        return True
-
-    # "Kopargaon APMC"
-    if wanted in actual:
-        return True
-
-    # "Kopargaon Market"
-    if actual in wanted:
-        return True
-
-    # Token based matching.
-    wanted_tokens = set(
-        wanted.split()
-    )
-
-    actual_tokens = set(
-        actual.split()
-    )
-
-    if wanted_tokens.issubset(
-        actual_tokens
-    ):
-        return True
-
-    return False
-
-
-# ============================================================
-# DISTRICT MATCHING
-# ============================================================
-
-def district_matches(value):
-
-    actual = normalize_text(
-        value
-    )
-
-    wanted = normalize_text(
-        DISTRICT
-    )
-
-    if not actual:
-        return False
-
-    if not wanted:
-        return False
-
-    if actual == wanted:
-        return True
-
-    if wanted in actual:
-        return True
-
-    if actual in wanted:
-        return True
-
-    # Ahilyanagar was formerly Ahmednagar.
-    if (
-        "ahilyanagar" in wanted
-        and
-        "ahmednagar" in actual
-    ):
-        return True
-
-    if (
-        "ahmednagar" in wanted
-        and
-        "ahilyanagar" in actual
-    ):
-        return True
-
-    return False
-
-
-# ============================================================
-# COMMODITY MATCHING
-# ============================================================
-
-def commodity_matches(
+def contains_alias(
     value,
-    crop
+    aliases
 ):
 
-    actual = normalize_text(
+    normalized = normalize_text(
         value
     )
 
-    wanted = normalize_text(
-        CROP_NAMES[crop]
-    )
+    if not normalized:
+        return False
 
-    if actual == wanted:
-        return True
+    for alias in aliases:
 
-    if wanted in actual:
-        return True
+        alias_normalized = normalize_text(
+            alias
+        )
 
-    if actual in wanted:
-        return True
+        if (
+            alias_normalized
+            in normalized
+        ):
+
+            return True
 
     return False
+
+
+def market_match_score(
+    market
+):
+
+    normalized_market = normalize_text(
+        market
+    )
+
+    if not normalized_market:
+
+        return 0
+
+
+    # Strongest possible match.
+
+    if normalized_market == "kopargaon":
+
+        return 100
+
+
+    if normalized_market == "kopargaon apmc":
+
+        return 100
+
+
+    if (
+        "kopargaon"
+        in normalized_market
+    ):
+
+        return 95
+
+
+    return 0
+
+
+def district_match_score(
+    district
+):
+
+    normalized_district = normalize_text(
+        district
+    )
+
+    if not normalized_district:
+
+        return 0
+
+
+    if (
+        normalized_district
+        == "ahilyanagar"
+    ):
+
+        return 40
+
+
+    if (
+        normalized_district
+        == "ahmednagar"
+    ):
+
+        return 40
+
+
+    if (
+        normalized_district
+        == "ahmadnagar"
+    ):
+
+        return 40
+
+
+    if (
+        "ahilyanagar"
+        in normalized_district
+    ):
+
+        return 40
+
+
+    if (
+        "ahmednagar"
+        in normalized_district
+    ):
+
+        return 40
+
+
+    if (
+        "ahmadnagar"
+        in normalized_district
+    ):
+
+        return 40
+
+
+    return 0
+
+
+def state_match_score(
+    state
+):
+
+    normalized_state = normalize_text(
+        state
+    )
+
+    if (
+        normalized_state
+        == "maharashtra"
+    ):
+
+        return 20
+
+
+    if (
+        "maharashtra"
+        in normalized_state
+    ):
+
+        return 20
+
+
+    return 0
 
 
 # ============================================================
@@ -564,39 +660,145 @@ def find_matching_record(
 ):
 
     if not records:
+
         return None
 
+
+    expected_commodity = (
+        CROP_NAMES[crop]
+    )
+
+
     candidates = []
+
 
     for record in records:
 
         commodity = clean_text(
             get_field(
                 record,
-                "commodity"
+                "commodity",
+                "Commodity",
+                "commodity_name",
+                "commodityname"
             )
         )
+
 
         market = clean_text(
             get_field(
                 record,
-                "market"
+                "market",
+                "Market",
+                "market_name",
+                "marketname"
             )
         )
+
 
         district = clean_text(
             get_field(
                 record,
-                "district"
+                "district",
+                "District",
+                "district_name",
+                "districtname"
             )
         )
+
 
         state = clean_text(
             get_field(
                 record,
-                "state"
+                "state",
+                "State",
+                "state_name",
+                "statename"
             )
         )
+
+
+        # ----------------------------------------------------
+        # Commodity
+        # ----------------------------------------------------
+
+        commodity_normalized = normalize_text(
+            commodity
+        )
+
+        expected_normalized = normalize_text(
+            expected_commodity
+        )
+
+
+        commodity_match = (
+
+            commodity_normalized
+            == expected_normalized
+
+        )
+
+
+        if not commodity_match:
+
+            commodity_match = (
+
+                expected_normalized
+                in commodity_normalized
+
+                or
+
+                commodity_normalized
+                in expected_normalized
+
+            )
+
+
+        if not commodity_match:
+
+            continue
+
+
+        # ----------------------------------------------------
+        # Location scores
+        # ----------------------------------------------------
+
+        market_score = (
+            market_match_score(
+                market
+            )
+        )
+
+
+        district_score = (
+            district_match_score(
+                district
+            )
+        )
+
+
+        state_score = (
+            state_match_score(
+                state
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # We ONLY accept Kopargaon records.
+        #
+        # This prevents accidentally showing a price from
+        # another Maharashtra market.
+        # ----------------------------------------------------
+
+        if market_score <= 0:
+
+            continue
+
+
+        # ----------------------------------------------------
+        # Date
+        # ----------------------------------------------------
 
         arrival_date = parse_date(
             get_field(
@@ -604,9 +806,24 @@ def find_matching_record(
                 "arrival_date",
                 "arrivaldate",
                 "date",
-                "reported_date"
+                "reported_date",
+                "reportdate"
             )
         )
+
+
+        if arrival_date:
+
+            date_score = 10
+
+        else:
+
+            date_score = 0
+
+
+        # ----------------------------------------------------
+        # Price availability
+        # ----------------------------------------------------
 
         min_price = extract_number(
             get_field(
@@ -618,6 +835,7 @@ def find_matching_record(
             )
         )
 
+
         max_price = extract_number(
             get_field(
                 record,
@@ -628,6 +846,7 @@ def find_matching_record(
             )
         )
 
+
         modal_price = extract_number(
             get_field(
                 record,
@@ -636,63 +855,48 @@ def find_matching_record(
             )
         )
 
-        if not commodity_matches(
-            commodity,
-            crop
-        ):
-            continue
 
-        # State must match.
-        state_match = (
-            normalize_text(state)
-            == normalize_text(STATE)
-        )
+        # We need at least a usable price.
 
-        if not state_match:
-            continue
-
-        # Market must match Kopargaon.
-        if not market_matches(
-            market
-        ):
-            continue
-
-        # District is preferred but not mandatory.
-        district_match = district_matches(
-            district
-        )
-
-        # Valid price record required.
         if (
             min_price is None
-            or
+            and
             max_price is None
-            or
+            and
             modal_price is None
         ):
+
             continue
 
-        score = 100
 
-        if district_match:
-            score += 50
+        total_score = (
+            market_score
+            +
+            district_score
+            +
+            state_score
+            +
+            date_score
+        )
 
-        if arrival_date:
-            score += 20
 
         candidates.append(
             (
-                score,
+                total_score,
                 arrival_date or "0000-00-00",
                 record
             )
         )
 
+
     if not candidates:
+
         return None
 
-    # Highest score first.
-    # Newest arrival date second.
+
+    # Highest location score.
+    # If equal, newest date wins.
+
     candidates.sort(
         key=lambda item: (
             item[0],
@@ -701,7 +905,163 @@ def find_matching_record(
         reverse=True
     )
 
-    return candidates[0][2]
+
+    selected = candidates[0][2]
+
+
+    print()
+    print(
+        "MATCHED GOVERNMENT RECORD"
+    )
+    print(
+        "Commodity:",
+        get_field(
+            selected,
+            "commodity",
+            "Commodity"
+        )
+    )
+    print(
+        "Market:",
+        get_field(
+            selected,
+            "market",
+            "Market",
+            "market_name"
+        )
+    )
+    print(
+        "District:",
+        get_field(
+            selected,
+            "district",
+            "District"
+        )
+    )
+    print(
+        "State:",
+        get_field(
+            selected,
+            "state",
+            "State"
+        )
+    )
+    print(
+        "Date:",
+        get_field(
+            selected,
+            "arrival_date",
+            "arrivaldate",
+            "date"
+        )
+    )
+    print(
+        "Modal:",
+        get_field(
+            selected,
+            "modal_price",
+            "modalprice"
+        )
+    )
+    print()
+
+
+    return selected
+
+
+# ============================================================
+# GOVERNMENT API REQUEST
+# ============================================================
+
+def government_request(
+    params
+):
+
+    try:
+
+        response = requests.get(
+
+            DATA_GOV_API_URL,
+
+            params=params,
+
+            headers=HEADERS,
+
+            timeout=REQUEST_TIMEOUT
+
+        )
+
+        print(
+            "Government API URL:",
+            response.url
+        )
+
+        print(
+            "Government API status:",
+            response.status_code
+        )
+
+
+        response.raise_for_status()
+
+
+    except requests.Timeout as error:
+
+        raise RuntimeError(
+            "Government OGD API timed out."
+        ) from error
+
+
+    except requests.RequestException as error:
+
+        raise RuntimeError(
+            "Government OGD API request failed: "
+            + str(error)
+        ) from error
+
+
+    try:
+
+        payload = response.json()
+
+    except ValueError as error:
+
+        raise RuntimeError(
+            "Government OGD API returned invalid JSON."
+        ) from error
+
+
+    if not isinstance(
+        payload,
+        dict
+    ):
+
+        raise RuntimeError(
+            "Government OGD API returned an unexpected response."
+        )
+
+
+    records = payload.get(
+        "records",
+        []
+    )
+
+
+    if not isinstance(
+        records,
+        list
+    ):
+
+        records = []
+
+
+    print(
+        "Government records received:",
+        len(records)
+    )
+
+
+    return records
 
 
 # ============================================================
@@ -715,38 +1075,35 @@ def fetch_government_market_data(
     if not DATA_GOV_API_KEY:
 
         raise RuntimeError(
-            "DATA_GOV_API_KEY is not configured "
-            "in Render environment variables."
+            "DATA_GOV_API_KEY is not configured on Render."
         )
+
 
     commodity = CROP_NAMES[crop]
 
+
     print()
-    print("=" * 60)
-    print("GOVERNMENT API REQUEST")
-    print("=" * 60)
+    print("=" * 70)
+    print("SMARTAGRI GOVERNMENT MARKET REQUEST")
+    print("=" * 70)
     print("Crop:", crop)
     print("Commodity:", commodity)
-    print("State:", STATE)
-    print("District:", DISTRICT)
-    print("Target Market:", MARKET_NAME)
+    print("Target market:", MARKET_NAME)
+    print("Target district:", DISTRICT)
+    print("Target state:", STATE)
     print("Resource:", DATA_GOV_RESOURCE_ID)
-    print("=" * 60)
+    print("=" * 70)
 
-    # --------------------------------------------------------
-    # IMPORTANT:
+
+    # ========================================================
+    # REQUEST 1
     #
-    # Do NOT filter market here.
+    # Search only commodity.
     #
-    # The government dataset may use:
-    #
-    # Kopargaon
-    # Kopargaon APMC
-    # Kopargaon Market
-    #
-    # Therefore we retrieve Maharashtra + commodity records
-    # and perform the Kopargaon matching ourselves.
-    # --------------------------------------------------------
+    # We intentionally do NOT filter Market here because
+    # the government dataset may use a different market
+    # spelling/name.
+    # ========================================================
 
     params = {
 
@@ -762,96 +1119,35 @@ def fetch_government_market_data(
         "offset":
             0,
 
-        "filters[state]":
-            STATE,
-
-        "filters[commodity]":
+        "filters[Commodity]":
             commodity
+
     }
 
-    try:
 
-        response = requests.get(
-            DATA_GOV_API_URL,
-            params=params,
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT
-        )
-
-        print(
-            "HTTP status:",
-            response.status_code
-        )
-
-        response.raise_for_status()
-
-    except requests.Timeout as error:
-
-        raise RuntimeError(
-            "Government API timed out."
-        ) from error
-
-    except requests.RequestException as error:
-
-        raise RuntimeError(
-            "Government API request failed: "
-            + str(error)
-        ) from error
-
-    try:
-
-        payload = response.json()
-
-    except ValueError as error:
-
-        raise RuntimeError(
-            "Government API returned invalid JSON."
-        ) from error
-
-    records = payload.get(
-        "records",
-        []
+    records = government_request(
+        params
     )
 
-    if not isinstance(
-        records,
-        list
-    ):
-
-        records = []
-
-    print(
-        "Records received:",
-        len(records)
-    )
 
     selected = find_matching_record(
         records,
         crop
     )
 
-    if selected:
 
-        print(
-            "MATCH FOUND:",
-            selected
-        )
+    if selected is not None:
 
         return selected
 
-    # --------------------------------------------------------
-    # SECOND SEARCH:
+
+    # ========================================================
+    # REQUEST 2
     #
-    # Sometimes the API's state/commodity filter behaves
-    # differently. Search Maharashtra records without the
-    # commodity filter and match everything locally.
-    # --------------------------------------------------------
+    # Try state filter.
+    # ========================================================
 
-    print(
-        "No match from state + commodity query."
-    )
-
-    broad_params = {
+    state_params = {
 
         "api-key":
             DATA_GOV_API_KEY,
@@ -860,133 +1156,138 @@ def fetch_government_market_data(
             "json",
 
         "limit":
-            5000,
+            1000,
 
         "offset":
             0,
 
-        "filters[state]":
-            STATE
+        "filters[State]":
+            STATE,
+
+        "filters[Commodity]":
+            commodity
+
     }
 
-    try:
 
-        broad_response = requests.get(
-            DATA_GOV_API_URL,
-            params=broad_params,
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT
-        )
-
-        broad_response.raise_for_status()
-
-        broad_payload = (
-            broad_response.json()
-        )
-
-        broad_records = (
-            broad_payload.get(
-                "records",
-                []
-            )
-        )
-
-        if not isinstance(
-            broad_records,
-            list
-        ):
-
-            broad_records = []
-
-        print(
-            "Broad Maharashtra records:",
-            len(broad_records)
-        )
-
-        selected = find_matching_record(
-            broad_records,
-            crop
-        )
-
-        if selected:
-
-            print(
-                "MATCH FOUND IN BROAD QUERY:",
-                selected
-            )
-
-            return selected
-
-    except requests.Timeout:
-
-        pass
-
-    except Exception as error:
-
-        print(
-            "Broad query error:",
-            error
-        )
-
-    # --------------------------------------------------------
-    # Provide useful diagnostic information.
-    # --------------------------------------------------------
-
-    markets_seen = []
-
-    for record in records:
-
-        commodity_value = clean_text(
-            get_field(
-                record,
-                "commodity"
-            )
-        )
-
-        if not commodity_matches(
-            commodity_value,
-            crop
-        ):
-            continue
-
-        market_value = clean_text(
-            get_field(
-                record,
-                "market"
-            )
-        )
-
-        if market_value:
-            markets_seen.append(
-                market_value
-            )
-
-    markets_seen = sorted(
-        list(
-            set(markets_seen)
-        )
+    state_records = government_request(
+        state_params
     )
 
-    diagnostic = ", ".join(
-        markets_seen[:30]
+
+    selected = find_matching_record(
+        state_records,
+        crop
     )
 
-    if diagnostic:
 
-        raise RuntimeError(
-            "No Kopargaon market record was found "
-            "for "
-            + commodity
-            + ". Markets returned by the government "
-              "API include: "
-            + diagnostic
-        )
+    if selected is not None:
+
+        return selected
+
+
+    # ========================================================
+    # REQUEST 3
+    #
+    # Try district filter using the current official name.
+    # ========================================================
+
+    district_params = {
+
+        "api-key":
+            DATA_GOV_API_KEY,
+
+        "format":
+            "json",
+
+        "limit":
+            1000,
+
+        "offset":
+            0,
+
+        "filters[District]":
+            DISTRICT,
+
+        "filters[Commodity]":
+            commodity
+
+    }
+
+
+    district_records = government_request(
+        district_params
+    )
+
+
+    selected = find_matching_record(
+        district_records,
+        crop
+    )
+
+
+    if selected is not None:
+
+        return selected
+
+
+    # ========================================================
+    # REQUEST 4
+    #
+    # Old district name.
+    # ========================================================
+
+    old_district_params = {
+
+        "api-key":
+            DATA_GOV_API_KEY,
+
+        "format":
+            "json",
+
+        "limit":
+            1000,
+
+        "offset":
+            0,
+
+        "filters[District]":
+            "Ahmednagar",
+
+        "filters[Commodity]":
+            commodity
+
+    }
+
+
+    old_district_records = government_request(
+        old_district_params
+    )
+
+
+    selected = find_matching_record(
+        old_district_records,
+        crop
+    )
+
+
+    if selected is not None:
+
+        return selected
+
+
+    # ========================================================
+    # Nothing found.
+    # ========================================================
 
     raise RuntimeError(
-        "No matching Kopargaon market record was "
-        "returned by the government API for "
+        "No Kopargaon government market record "
+        "was found for "
         + commodity
-        + "."
+        + ". "
+        "The OGD API responded, but the returned records "
+        "did not contain a Kopargaon market entry with "
+        "usable price data."
     )
 
 
@@ -1002,30 +1303,46 @@ def convert_government_record(
     commodity = clean_text(
         get_field(
             raw_record,
-            "commodity"
+            "commodity",
+            "Commodity",
+            "commodity_name",
+            "commodityname"
         )
     )
+
 
     market = clean_text(
         get_field(
             raw_record,
-            "market"
+            "market",
+            "Market",
+            "market_name",
+            "marketname"
         )
     )
+
 
     district = clean_text(
         get_field(
             raw_record,
-            "district"
+            "district",
+            "District",
+            "district_name",
+            "districtname"
         )
     )
+
 
     state = clean_text(
         get_field(
             raw_record,
-            "state"
+            "state",
+            "State",
+            "state_name",
+            "statename"
         )
     )
+
 
     arrival_date = parse_date(
         get_field(
@@ -1033,9 +1350,11 @@ def convert_government_record(
             "arrival_date",
             "arrivaldate",
             "date",
-            "reported_date"
+            "reported_date",
+            "reportdate"
         )
     )
+
 
     min_price = extract_number(
         get_field(
@@ -1047,6 +1366,7 @@ def convert_government_record(
         )
     )
 
+
     max_price = extract_number(
         get_field(
             raw_record,
@@ -1057,6 +1377,7 @@ def convert_government_record(
         )
     )
 
+
     modal_price = extract_number(
         get_field(
             raw_record,
@@ -1065,37 +1386,87 @@ def convert_government_record(
         )
     )
 
+
     variety = clean_text(
         get_field(
             raw_record,
-            "variety"
+            "variety",
+            "Variety"
         )
     )
+
 
     grade = clean_text(
         get_field(
             raw_record,
-            "grade"
+            "grade",
+            "Grade"
         )
     )
 
+
     if not commodity:
+
         commodity = CROP_NAMES[crop]
 
+
     if not market:
+
         market = MARKET_NAME
 
+
     if not district:
+
         district = DISTRICT
 
+
     if not state:
+
         state = STATE
+
 
     if not arrival_date:
 
         raise RuntimeError(
-            "Government record has no valid arrival date."
+            "Government record does not contain a valid date."
         )
+
+
+    # --------------------------------------------------------
+    # If one price field is missing, derive it only from
+    # other REAL government price fields.
+    #
+    # No external/fake value is introduced.
+    # --------------------------------------------------------
+
+    if modal_price is None:
+
+        if (
+            min_price is not None
+            and
+            max_price is not None
+        ):
+
+            modal_price = (
+                min_price
+                +
+                max_price
+            ) / 2
+
+
+    if min_price is None:
+
+        if modal_price is not None:
+
+            min_price = modal_price
+
+
+    if max_price is None:
+
+        if modal_price is not None:
+
+            max_price = modal_price
+
 
     if min_price is None:
 
@@ -1103,11 +1474,13 @@ def convert_government_record(
             "Government record has no minimum price."
         )
 
+
     if max_price is None:
 
         raise RuntimeError(
             "Government record has no maximum price."
         )
+
 
     if modal_price is None:
 
@@ -1115,11 +1488,13 @@ def convert_government_record(
             "Government record has no modal price."
         )
 
+
     retrieved_at = (
         datetime.now(
             timezone.utc
         ).isoformat()
     )
+
 
     return {
 
@@ -1177,14 +1552,15 @@ def convert_government_record(
 def store_record(record):
 
     connection = get_db_connection()
-
     cursor = connection.cursor()
+
 
     now = (
         datetime.now(
             timezone.utc
         ).isoformat()
     )
+
 
     cursor.execute(
         """
@@ -1259,36 +1635,57 @@ def store_record(record):
                 excluded.retrieved_at
         """,
         (
+
             record["crop"],
+
             record["commodity"],
+
             record["market"],
+
             record["district"],
+
             record["state"],
+
             record["arrival_date"],
+
             record.get(
                 "variety",
                 ""
             ),
+
             record.get(
                 "grade",
                 ""
             ),
+
             record["min_price"],
+
             record["max_price"],
+
             record["modal_price"],
+
             record["unit"],
+
             record["source"],
+
             record["source_url"],
+
             record["retrieved_at"],
+
             now
+
         )
     )
 
+
     connection.commit()
+
 
     stored_id = cursor.lastrowid
 
+
     connection.close()
+
 
     return stored_id
 
@@ -1303,18 +1700,15 @@ def get_history_records(
 ):
 
     connection = get_db_connection()
-
     cursor = connection.cursor()
+
 
     cursor.execute(
         """
         SELECT *
         FROM market_history
-
         WHERE crop = ?
-
         ORDER BY arrival_date ASC
-
         LIMIT ?
         """,
         (
@@ -1323,9 +1717,12 @@ def get_history_records(
         )
     )
 
+
     rows = cursor.fetchall()
 
+
     connection.close()
+
 
     return [
         dict(row)
@@ -1361,6 +1758,7 @@ def calculate_trend(
                 "insufficient_data"
         }
 
+
     prices = [
 
         float(
@@ -1372,7 +1770,9 @@ def calculate_trend(
         if record.get(
             "modal_price"
         ) is not None
+
     ]
+
 
     if not prices:
 
@@ -1394,7 +1794,9 @@ def calculate_trend(
                 "insufficient_data"
         }
 
+
     current_price = prices[-1]
+
 
     if len(prices) < 2:
 
@@ -1416,7 +1818,9 @@ def calculate_trend(
                 "insufficient_data"
         }
 
+
     previous_price = prices[-2]
+
 
     if previous_price == 0:
 
@@ -1425,17 +1829,24 @@ def calculate_trend(
     else:
 
         change_percent = (
+
             (
                 current_price
-                - previous_price
+                -
+                previous_price
             )
-            / previous_price
+            /
+            previous_price
+
         ) * 100
+
 
     if change_percent is None:
 
         direction = "unknown"
+
         strength = "unknown"
+
 
     elif change_percent > 1:
 
@@ -1447,6 +1858,7 @@ def calculate_trend(
             else "moderate"
         )
 
+
     elif change_percent < -1:
 
         direction = "falling"
@@ -1457,10 +1869,13 @@ def calculate_trend(
             else "moderate"
         )
 
+
     else:
 
         direction = "stable"
+
         strength = "weak"
+
 
     return {
 
@@ -1496,12 +1911,17 @@ def moving_average(
 ):
 
     if not prices:
+
         return None
+
 
     selected = prices[-window:]
 
+
     if not selected:
+
         return None
+
 
     return round(
         statistics.mean(selected),
@@ -1528,11 +1948,14 @@ def calculate_analysis(
         if record.get(
             "modal_price"
         ) is not None
+
     ]
+
 
     trend = calculate_trend(
         records
     )
+
 
     if not prices:
 
@@ -1576,31 +1999,38 @@ def calculate_analysis(
 
                     "unit":
                         "Rs./Quintal"
+
                 }
+
         }
+
 
     average_price = statistics.mean(
         prices
     )
+
 
     ma3 = moving_average(
         prices,
         3
     )
 
+
     ma7 = moving_average(
         prices,
         7
     )
+
 
     ma14 = moving_average(
         prices,
         14
     )
 
-    # --------------------------------------------------------
-    # Prediction
-    # --------------------------------------------------------
+
+    # ========================================================
+    # SHORT-TERM ESTIMATE
+    # ========================================================
 
     if len(prices) < 3:
 
@@ -1613,15 +2043,19 @@ def calculate_analysis(
         confidence = "low"
 
         reason = (
-            "At least 3 historical daily "
-            "records are recommended."
+            "At least 3 historical "
+            "government price records "
+            "are recommended."
         )
+
 
     else:
 
         recent = prices[-3:]
 
+
         changes = []
+
 
         for index in range(
             1,
@@ -1636,51 +2070,70 @@ def calculate_analysis(
                 index
             ]
 
+
             if previous != 0:
 
                 changes.append(
+
                     (
-                        current - previous
+                        current
+                        -
+                        previous
                     )
-                    / previous
-                    * 100
+                    /
+                    previous
+                    *
+                    100
+
                 )
+
 
         if changes:
 
-            average_change = (
-                statistics.mean(
-                    changes
-                )
+            average_change = statistics.mean(
+                changes
             )
 
         else:
 
             average_change = 0
 
-        # Prevent extreme forecast.
+
+        # Keep the estimate conservative.
+
         capped_change = max(
+
             min(
                 average_change,
                 10
             ),
+
             -10
+
         )
+
 
         current_price = prices[-1]
 
+
         estimated_price = (
+
             current_price
-            * (
+            *
+            (
                 1
-                + capped_change / 100
+                +
+                capped_change / 100
             )
+
         )
+
 
         estimated_price = round(
             estimated_price,
             2
         )
+
 
         if average_change > 1:
 
@@ -1688,11 +2141,13 @@ def calculate_analysis(
                 "rising"
             )
 
+
         elif average_change < -1:
 
             prediction_direction = (
                 "falling"
             )
+
 
         else:
 
@@ -1700,22 +2155,28 @@ def calculate_analysis(
                 "stable"
             )
 
+
         if len(prices) >= 14:
 
             confidence = "high"
+
 
         elif len(prices) >= 7:
 
             confidence = "medium"
 
+
         else:
 
             confidence = "low"
 
+
         reason = (
             "Estimate based on recent "
-            "historical modal-price movement."
+            "government historical "
+            "modal-price movement."
         )
+
 
     return {
 
@@ -1760,7 +2221,9 @@ def calculate_analysis(
 
                 "unit":
                     "Rs./Quintal"
+
             }
+
     }
 
 
@@ -1778,6 +2241,7 @@ def collect_crop(
         )
     )
 
+
     record = (
         convert_government_record(
             raw_record,
@@ -1785,24 +2249,27 @@ def collect_crop(
         )
     )
 
+
     stored_id = store_record(
         record
     )
 
+
     history = get_history_records(
         crop,
-        365
+        limit=365
     )
+
 
     analysis = calculate_analysis(
         history
     )
 
+
     record["stored"] = True
 
-    record["database_id"] = (
-        stored_id
-    )
+    record["database_id"] = stored_id
+
 
     return record, analysis
 
@@ -1817,8 +2284,8 @@ def collect_crop(
 def health():
 
     connection = get_db_connection()
-
     cursor = connection.cursor()
+
 
     cursor.execute(
         """
@@ -1827,9 +2294,11 @@ def health():
         """
     )
 
+
     total_records = (
         cursor.fetchone()[0]
     )
+
 
     cursor.execute(
         """
@@ -1839,9 +2308,11 @@ def health():
         """
     )
 
+
     onion_records = (
         cursor.fetchone()[0]
     )
+
 
     cursor.execute(
         """
@@ -1851,11 +2322,14 @@ def health():
         """
     )
 
+
     wheat_records = (
         cursor.fetchone()[0]
     )
 
+
     connection.close()
+
 
     return jsonify({
 
@@ -1867,6 +2341,9 @@ def health():
 
         "database":
             "SQLite",
+
+        "database_path":
+            DATABASE_PATH,
 
         "market":
             MARKET_NAME,
@@ -1881,9 +2358,11 @@ def health():
             "Government of India OGD / AGMARKNET",
 
         "government_api_configured":
-            bool(DATA_GOV_API_KEY),
+            bool(
+                DATA_GOV_API_KEY
+            ),
 
-        "resource_id":
+        "government_resource_id":
             DATA_GOV_RESOURCE_ID,
 
         "fallback":
@@ -1902,191 +2381,12 @@ def health():
 
         "wheat_records":
             wheat_records
+
     })
 
 
 # ============================================================
-# DEBUG ENDPOINT
-# ============================================================
-#
-# Use this if /api/market still fails.
-#
-# It shows the market names actually returned by the
-# government API.
-#
-# Example:
-#
-# /api/debug?crop=onion
-#
-# ============================================================
-
-@app.route(
-    "/api/debug"
-)
-def debug():
-
-    crop = (
-        request.args
-        .get(
-            "crop",
-            "onion"
-        )
-        .strip()
-        .lower()
-    )
-
-    if crop not in CROP_NAMES:
-
-        return jsonify({
-
-            "success":
-                False,
-
-            "message":
-                "Use onion or wheat."
-        }), 400
-
-    if not DATA_GOV_API_KEY:
-
-        return jsonify({
-
-            "success":
-                False,
-
-            "message":
-                "DATA_GOV_API_KEY is missing."
-        }), 500
-
-    params = {
-
-        "api-key":
-            DATA_GOV_API_KEY,
-
-        "format":
-            "json",
-
-        "limit":
-            1000,
-
-        "offset":
-            0,
-
-        "filters[state]":
-            STATE,
-
-        "filters[commodity]":
-            CROP_NAMES[crop]
-    }
-
-    try:
-
-        response = requests.get(
-            DATA_GOV_API_URL,
-            params=params,
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT
-        )
-
-        response.raise_for_status()
-
-        payload = response.json()
-
-        records = payload.get(
-            "records",
-            []
-        )
-
-        if not isinstance(
-            records,
-            list
-        ):
-            records = []
-
-        markets = []
-
-        matching_market_records = []
-
-        for record in records:
-
-            market = clean_text(
-                get_field(
-                    record,
-                    "market"
-                )
-            )
-
-            district = clean_text(
-                get_field(
-                    record,
-                    "district"
-                )
-            )
-
-            state = clean_text(
-                get_field(
-                    record,
-                    "state"
-                )
-            )
-
-            if market:
-
-                markets.append(
-                    market
-                )
-
-            if market_matches(
-                market
-            ):
-
-                matching_market_records.append(
-                    record
-                )
-
-        markets = sorted(
-            list(
-                set(markets)
-            )
-        )
-
-        return jsonify({
-
-            "success":
-                True,
-
-            "crop":
-                crop,
-
-            "commodity":
-                CROP_NAMES[crop],
-
-            "state":
-                STATE,
-
-            "records_received":
-                len(records),
-
-            "markets_found":
-                markets,
-
-            "kopargaon_matches":
-                matching_market_records
-        })
-
-    except Exception as error:
-
-        return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                str(error)
-        }), 502
-
-
-# ============================================================
-# COLLECT
+# COLLECT ENDPOINT
 # ============================================================
 
 @app.route(
@@ -2104,6 +2404,7 @@ def collect():
         .lower()
     )
 
+
     if crop not in CROP_NAMES:
 
         return jsonify({
@@ -2114,15 +2415,16 @@ def collect():
             "message":
                 "Unsupported crop. "
                 "Use onion or wheat."
+
         }), 400
+
 
     try:
 
         record, analysis = (
-            collect_crop(
-                crop
-            )
+            collect_crop(crop)
         )
+
 
         return jsonify({
 
@@ -2141,7 +2443,9 @@ def collect():
 
             "analysis":
                 analysis
+
         })
+
 
     except Exception as error:
 
@@ -2149,6 +2453,7 @@ def collect():
             "COLLECTION ERROR:",
             error
         )
+
 
         return jsonify({
 
@@ -2164,11 +2469,12 @@ def collect():
 
             "error":
                 str(error)
+
         }), 502
 
 
 # ============================================================
-# HISTORY
+# HISTORY ENDPOINT
 # ============================================================
 
 @app.route(
@@ -2186,6 +2492,7 @@ def history():
         .lower()
     )
 
+
     if crop not in CROP_NAMES:
 
         return jsonify({
@@ -2196,7 +2503,9 @@ def history():
             "message":
                 "Unsupported crop. "
                 "Use onion or wheat."
+
         }), 400
+
 
     try:
 
@@ -2211,6 +2520,7 @@ def history():
 
         limit = 365
 
+
     limit = max(
         1,
         min(
@@ -2219,14 +2529,17 @@ def history():
         )
     )
 
+
     records = get_history_records(
         crop,
         limit
     )
 
+
     analysis = calculate_analysis(
         records
     )
+
 
     return jsonify({
 
@@ -2256,11 +2569,12 @@ def history():
 
         "analysis":
             analysis
+
     })
 
 
 # ============================================================
-# MARKET
+# MARKET ENDPOINT
 # ============================================================
 
 @app.route(
@@ -2278,6 +2592,7 @@ def market():
         .lower()
     )
 
+
     if crop not in CROP_NAMES:
 
         return jsonify({
@@ -2288,20 +2603,22 @@ def market():
             "message":
                 "Unsupported crop. "
                 "Use onion or wheat."
+
         }), 400
+
 
     try:
 
         record, analysis = (
-            collect_crop(
-                crop
-            )
+            collect_crop(crop)
         )
+
 
         history = get_history_records(
             crop,
-            365
+            limit=365
         )
+
 
         return jsonify({
 
@@ -2336,9 +2653,11 @@ def market():
                 len(history),
 
             "message":
-                "Live government market data "
-                "retrieved, stored, and analyzed."
+                "Government market data "
+                "retrieved, stored and analyzed."
+
         })
+
 
     except Exception as error:
 
@@ -2347,20 +2666,26 @@ def market():
             error
         )
 
-        # ----------------------------------------------------
-        # Preserve history if live API fails.
-        # ----------------------------------------------------
+
+        # ====================================================
+        # If live government request fails, use previously
+        # stored GOVERNMENT data.
+        #
+        # Still no fake price.
+        # ====================================================
 
         history = get_history_records(
             crop,
-            365
+            limit=365
         )
+
 
         if history:
 
             analysis = calculate_analysis(
                 history
             )
+
 
             return jsonify({
 
@@ -2402,7 +2727,9 @@ def market():
 
                 "live_error":
                     str(error)
+
             })
+
 
         return jsonify({
 
@@ -2427,10 +2754,12 @@ def market():
             "message":
                 "Government market data is "
                 "currently unavailable and "
-                "no historical records exist yet.",
+                "no historical government "
+                "records have been stored yet.",
 
             "error":
                 str(error)
+
         }), 502
 
 
@@ -2465,18 +2794,18 @@ def files(filename):
 if __name__ == "__main__":
 
     print()
-    print("=" * 60)
+    print("=" * 70)
     print("SMARTAGRI KOPARGAON")
-    print("=" * 60)
-    print("GOVERNMENT API + HISTORICAL DATA")
-    print("-" * 60)
+    print("=" * 70)
+    print("GOVERNMENT OGD / AGMARKNET")
+    print("-" * 70)
     print("Onion")
     print("Wheat")
-    print("-" * 60)
+    print("-" * 70)
     print("Market:", MARKET_NAME)
     print("District:", DISTRICT)
     print("State:", STATE)
-    print("-" * 60)
+    print("-" * 70)
     print(
         "Government API configured:",
         bool(DATA_GOV_API_KEY)
@@ -2489,15 +2818,20 @@ if __name__ == "__main__":
         "Database:",
         DATABASE_PATH
     )
-    print("=" * 60)
+    print("=" * 70)
+
 
     app.run(
+
         host="0.0.0.0",
+
         port=int(
             os.environ.get(
                 "PORT",
                 5000
             )
         ),
+
         debug=False
+
     )
