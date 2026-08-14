@@ -1,4 +1,3 @@
-```python
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import requests
@@ -1460,4 +1459,3 @@ if __name__ == "__main__":
         port=port,
         debug=True
     )
-```
