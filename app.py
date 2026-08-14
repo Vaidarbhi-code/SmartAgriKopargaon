@@ -10,26 +10,16 @@ from flask import (
     send_file,
     send_from_directory,
 )
-
 from flask_cors import CORS
-
-from pymongo import (
-    MongoClient,
-    ASCENDING,
-    DESCENDING,
-)
-
-from pymongo.errors import (
-    PyMongoError,
-    OperationFailure,
-)
+from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo.errors import PyMongoError
 
 from scraper import scrape_crop
 
 
 # ============================================================
 # SMARTAGRI KOPARGAON
-# FLASK + MONGODB + AGMARKNET CEDA
+# DAILY MARKET DATA + MONGODB + FORECAST API
 # ============================================================
 
 app = Flask(
@@ -51,38 +41,20 @@ PORT = int(
     )
 )
 
-# ------------------------------------------------------------
-# MongoDB
-#
-# MONGODB_URI is REQUIRED on Render.
-#
-# MONGODB_DB_NAME is optional.
-#
-# MONGODB_COLLECTION is optional.
-# If you don't create it in Render, the application uses:
-#
-# market_prices
-# ------------------------------------------------------------
-
 MONGODB_URI = os.environ.get(
     "MONGODB_URI",
     ""
-).strip()
+)
 
 MONGODB_DB_NAME = os.environ.get(
     "MONGODB_DB_NAME",
     "SmartAgriKopargaon"
-).strip()
+)
 
 MONGODB_COLLECTION = os.environ.get(
     "MONGODB_COLLECTION",
     "market_prices"
-).strip()
-
-
-# ------------------------------------------------------------
-# Scraper refresh interval
-# ------------------------------------------------------------
+)
 
 SCRAPE_INTERVAL_HOURS = float(
     os.environ.get(
@@ -92,27 +64,8 @@ SCRAPE_INTERVAL_HOURS = float(
 )
 
 
-# ------------------------------------------------------------
-# Agmarknet API
-# ------------------------------------------------------------
-
-AGMARKNET_API_URL = (
-    "https://agmarknet.ceda.ashoka.edu.in/api/prices"
-)
-
-
 # ============================================================
-# SUPPORTED CROPS
-# ============================================================
-
-SUPPORTED_CROPS = {
-    "onion",
-    "wheat",
-}
-
-
-# ============================================================
-# MONGODB GLOBALS
+# MONGODB
 # ============================================================
 
 mongo_client = None
@@ -120,19 +73,13 @@ mongo_db = None
 market_collection = None
 
 
-# ============================================================
-# MONGODB CONNECTION
-# ============================================================
-
 def connect_mongodb():
     """
     Connect to MongoDB.
 
-    Only MONGODB_URI is required.
-
-    Database and collection are automatically selected
-    using the defaults above if environment variables are
-    not provided.
+    The collection does not need to be manually created.
+    MongoDB creates it automatically when the first document
+    is inserted.
     """
 
     global mongo_client
@@ -151,12 +98,9 @@ def connect_mongodb():
 
         mongo_client = MongoClient(
             MONGODB_URI,
-            serverSelectionTimeoutMS=10000,
-            connectTimeoutMS=10000,
-            socketTimeoutMS=10000,
+            serverSelectionTimeoutMS=10000
         )
 
-        # Force connection test.
         mongo_client.admin.command(
             "ping"
         )
@@ -199,208 +143,167 @@ def connect_mongodb():
         return False
 
 
-# ============================================================
-# MONGODB INDEXES
-# ============================================================
-
 def create_indexes():
     """
-    Create indexes safely.
+    Create useful indexes without failing the entire
+    application if MongoDB already contains equivalent
+    indexes under different names.
 
-    Important:
-    MongoDB may already contain an index such as:
-
-        crop_1_data_date_-1
-
-    with a different name than the one requested here.
-
-    Therefore IndexOptionsConflict is ignored instead of
-    making the entire MongoDB connection fail.
+    This specifically avoids the previous:
+        IndexOptionsConflict
+    problem.
     """
 
     if market_collection is None:
         return
 
-    indexes = [
+    try:
 
-        (
+        existing_indexes = (
+            market_collection.index_information()
+        )
+
+        # ----------------------------------------------------
+        # Normal non-unique lookup indexes
+        # ----------------------------------------------------
+
+        create_index_if_missing(
+            existing_indexes,
             [
                 ("crop", ASCENDING),
                 ("market", ASCENDING),
                 ("data_date", DESCENDING),
             ],
-            {
-                "name": "market_latest_lookup"
-            }
-        ),
+            "market_price_lookup"
+        )
 
-        (
+        create_index_if_missing(
+            existing_indexes,
             [
                 ("crop", ASCENDING),
                 ("data_date", DESCENDING),
             ],
-            {
-                "name": "crop_history_lookup"
-            }
-        ),
+            "crop_date_lookup"
+        )
 
-        (
+        # ----------------------------------------------------
+        # Unique daily-record index
+        # ----------------------------------------------------
+        #
+        # We include source so the same date can technically
+        # contain data from different sources without creating
+        # accidental conflicts.
+        #
+        # For normal NaPanta records, source is always NaPanta.
+        #
+
+        create_index_if_missing(
+            existing_indexes,
             [
                 ("crop", ASCENDING),
                 ("market", ASCENDING),
                 ("data_date", ASCENDING),
                 ("variety", ASCENDING),
+                ("source_name", ASCENDING),
             ],
-            {
-                "name": "unique_market_record",
-                "unique": True,
-            }
-        ),
-    ]
+            "unique_daily_market_record",
+            unique=True
+        )
 
-    for keys, options in indexes:
+    except Exception as exc:
 
-        try:
+        print(
+            "MongoDB index setup warning:",
+            repr(exc)
+        )
 
-            market_collection.create_index(
-                keys,
-                **options
-            )
 
-        except OperationFailure as exc:
+def create_index_if_missing(
+    existing_indexes,
+    keys,
+    name,
+    unique=False
+):
+    """
+    Create an index only when an equivalent index does not
+    already exist.
 
-            # MongoDB error 85:
-            # IndexOptionsConflict
-            if getattr(
-                exc,
-                "code",
-                None
-            ) == 85:
+    This prevents IndexOptionsConflict when MongoDB already
+    contains an index with another name.
+    """
 
-                print(
-                    "MongoDB index already exists "
-                    "with different options/name. "
-                    f"Continuing: {options.get('name')}"
-                )
+    wanted = tuple(keys)
 
-                continue
+    for existing_name, info in (
+        existing_indexes.items()
+    ):
+
+        existing_key = tuple(
+            info.get("key", [])
+        )
+
+        if existing_key == wanted:
 
             print(
-                "MongoDB index creation warning:",
-                repr(exc)
+                f"MongoDB index already exists: "
+                f"{existing_name}"
             )
 
+            return
 
-# ============================================================
-# START MONGODB
-# ============================================================
+    try:
+
+        market_collection.create_index(
+            keys,
+            name=name,
+            unique=unique
+        )
+
+        print(
+            f"MongoDB index created: {name}"
+        )
+
+    except Exception as exc:
+
+        print(
+            f"Could not create index {name}:",
+            repr(exc)
+        )
+
 
 connect_mongodb()
 
 
 # ============================================================
-# DATABASE STATUS
+# CROPS
+# ============================================================
+
+SUPPORTED_CROPS = {
+    "onion",
+    "wheat",
+}
+
+
+# ============================================================
+# DATABASE HELPERS
 # ============================================================
 
 def mongodb_ready():
 
     return (
-        market_collection is not None
+        market_collection
+        is not None
     )
 
-
-# ============================================================
-# DATE HELPERS
-# ============================================================
-
-def normalize_date(value):
-    """
-    Normalize dates from scraper/API into YYYY-MM-DD.
-
-    Examples:
-
-        2025-10
-        2025-10-01
-        2025-10-15
-
-    are converted to a consistent date string.
-    """
-
-    if value is None:
-        return None
-
-    value = str(value).strip()
-
-    if not value:
-        return None
-
-    # Monthly Agmarknet data.
-    if len(value) == 7:
-        try:
-
-            datetime.strptime(
-                value,
-                "%Y-%m"
-            )
-
-            return f"{value}-01"
-
-        except ValueError:
-            pass
-
-    # ISO datetime.
-    try:
-
-        parsed = datetime.fromisoformat(
-            value.replace(
-                "Z",
-                "+00:00"
-            )
-        )
-
-        return parsed.strftime(
-            "%Y-%m-%d"
-        )
-
-    except ValueError:
-        pass
-
-    # Date only.
-    for fmt in (
-        "%Y-%m-%d",
-        "%d-%m-%Y",
-        "%d/%m/%Y",
-        "%d %b %Y",
-        "%d %B %Y",
-    ):
-
-        try:
-
-            parsed = datetime.strptime(
-                value,
-                fmt
-            )
-
-            return parsed.strftime(
-                "%Y-%m-%d"
-            )
-
-        except ValueError:
-            continue
-
-    return value
-
-
-# ============================================================
-# DOCUMENT SERIALIZATION
-# ============================================================
 
 def serialize_document(document):
 
     if not document:
         return None
 
-    result = dict(document)
+    result = dict(
+        document
+    )
 
     result.pop(
         "_id",
@@ -438,322 +341,7 @@ def serialize_document(document):
 
 
 # ============================================================
-# RECORD NORMALIZATION
-# ============================================================
-
-def normalize_record(
-    record,
-    requested_crop=None
-):
-    """
-    Convert scraper/API records into the MongoDB schema.
-
-    Supports both:
-
-        {
-            "crop": "wheat",
-            ...
-        }
-
-    and Agmarknet-style:
-
-        {
-            "t": "2025-10",
-            "cmdty": "Wheat",
-            "p_min": ...,
-            "p_max": ...,
-            "p_modal": ...
-        }
-    """
-
-    if not isinstance(
-        record,
-        dict
-    ):
-
-        return None
-
-    crop = (
-        record.get("crop")
-        or record.get("cmdty")
-        or requested_crop
-        or ""
-    )
-
-    crop = str(
-        crop
-    ).strip().lower()
-
-    if crop not in SUPPORTED_CROPS:
-        return None
-
-    # --------------------------------------------------------
-    # Date
-    # --------------------------------------------------------
-
-    data_date = (
-        record.get("data_date")
-        or record.get("arrival_date")
-        or record.get("t")
-        or record.get("date")
-    )
-
-    data_date = normalize_date(
-        data_date
-    )
-
-    if not data_date:
-        return None
-
-    # --------------------------------------------------------
-    # Market
-    # --------------------------------------------------------
-
-    market = (
-        record.get("market")
-        or "Kopargaon"
-    )
-
-    market = str(
-        market
-    ).strip()
-
-    # --------------------------------------------------------
-    # Prices
-    # --------------------------------------------------------
-
-    def to_float(value):
-
-        if value is None:
-            return None
-
-        try:
-
-            if isinstance(
-                value,
-                str
-            ):
-
-                value = (
-                    value
-                    .replace(
-                        ",",
-                        ""
-                    )
-                    .replace(
-                        "₹",
-                        ""
-                    )
-                    .replace(
-                        "Rs.",
-                        ""
-                    )
-                    .replace(
-                        "Rs",
-                        ""
-                    )
-                    .strip()
-                )
-
-            return float(
-                value
-            )
-
-        except Exception:
-            return None
-
-    min_price = to_float(
-        record.get(
-            "min_price",
-            record.get(
-                "p_min"
-            )
-        )
-    )
-
-    max_price = to_float(
-        record.get(
-            "max_price",
-            record.get(
-                "p_max"
-            )
-        )
-    )
-
-    modal_price = to_float(
-        record.get(
-            "modal_price",
-            record.get(
-                "p_modal",
-                record.get(
-                    "price"
-                )
-            )
-        )
-    )
-
-    if modal_price is None:
-
-        # If modal is unavailable, use average
-        # when scraper supplies it.
-        modal_price = to_float(
-            record.get(
-                "average_price"
-            )
-        )
-
-    if modal_price is None:
-        return None
-
-    # --------------------------------------------------------
-    # Metadata
-    # --------------------------------------------------------
-
-    district = (
-        record.get(
-            "district"
-        )
-        or "Ahmadnagar"
-    )
-
-    commodity = (
-        record.get(
-            "commodity"
-        )
-        or record.get(
-            "cmdty"
-        )
-        or crop.title()
-    )
-
-    variety = (
-        record.get(
-            "variety"
-        )
-        or ""
-    )
-
-    source_url = (
-        record.get(
-            "source_url"
-        )
-        or AGMARKNET_API_URL
-    )
-
-    now = datetime.now(
-        timezone.utc
-    )
-
-    return {
-
-        "crop": crop,
-
-        "market": market,
-
-        "district": district,
-
-        "commodity": commodity,
-
-        "variety": variety,
-
-        "min_price": min_price,
-
-        "max_price": max_price,
-
-        "modal_price": modal_price,
-
-        # Keep compatibility with existing frontend.
-        "price": modal_price,
-
-        "data_date": data_date,
-
-        "source": "Agmarknet CEDA API",
-
-        "source_name": "Agmarknet CEDA API",
-
-        "source_url": source_url,
-
-        "scraped_at": now,
-
-        "updated_at": now,
-
-    }
-
-
-# ============================================================
-# NORMALIZE SCRAPER RESULT
-# ============================================================
-
-def normalize_scraper_result(
-    result,
-    crop
-):
-    """
-    The scraper may return:
-
-        dict
-
-    or:
-
-        list[dict]
-
-    Normalize both into a list.
-    """
-
-    if result is None:
-        return []
-
-    if isinstance(
-        result,
-        dict
-    ):
-
-        # Some scrapers return:
-        #
-        # {"data": [...]}
-        #
-        if isinstance(
-            result.get("data"),
-            list
-        ):
-
-            result = result[
-                "data"
-            ]
-
-        else:
-
-            result = [
-                result
-            ]
-
-    if not isinstance(
-        result,
-        list
-    ):
-
-        return []
-
-    records = []
-
-    for item in result:
-
-        normalized = normalize_record(
-            item,
-            crop
-        )
-
-        if normalized:
-
-            records.append(
-                normalized
-            )
-
-    return records
-
-
-# ============================================================
-# SAVE HISTORICAL RECORDS
+# SAVE DAILY RECORDS
 # ============================================================
 
 def save_records(records):
@@ -766,8 +354,61 @@ def save_records(records):
 
     inserted = 0
     updated = 0
+    skipped = 0
 
     for record in records:
+
+        crop = str(
+            record.get(
+                "crop",
+                ""
+            )
+        ).lower().strip()
+
+        if crop not in SUPPORTED_CROPS:
+
+            skipped += 1
+            continue
+
+        data_date = str(
+            record.get(
+                "data_date",
+                ""
+            )
+        ).strip()
+
+        market = str(
+            record.get(
+                "market",
+                "Kopargaon"
+            )
+        ).strip()
+
+        variety = str(
+            record.get(
+                "variety",
+                ""
+            )
+        ).strip()
+
+        source_name = str(
+            record.get(
+                "source_name",
+                record.get(
+                    "source",
+                    "NaPanta"
+                )
+            )
+        ).strip()
+
+        if not data_date:
+
+            skipped += 1
+            continue
+
+        if not market:
+
+            market = "Kopargaon"
 
         now = datetime.now(
             timezone.utc
@@ -778,100 +419,112 @@ def save_records(records):
         )
 
         document[
+            "crop"
+        ] = crop
+
+        document[
+            "market"
+        ] = market
+
+        document[
+            "data_date"
+        ] = data_date
+
+        document[
+            "variety"
+        ] = variety
+
+        document[
+            "source_name"
+        ] = source_name
+
+        document[
             "updated_at"
         ] = now
 
+        if "created_at" not in document:
+
+            document[
+                "created_at"
+            ] = now
+
+        document[
+            "scraped_at"
+        ] = now
+
         # ----------------------------------------------------
-        # Unique identity:
-        #
-        # crop + market + date + variety
-        #
-        # This means every month's market price becomes a
-        # historical MongoDB record.
+        # Unique daily record
         # ----------------------------------------------------
 
         filter_query = {
-
-            "crop": record[
-                "crop"
-            ],
-
-            "market": record[
-                "market"
-            ],
-
-            "data_date": record[
-                "data_date"
-            ],
-
-            "variety": record.get(
-                "variety",
-                ""
-            ),
+            "crop": crop,
+            "market": market,
+            "data_date": data_date,
+            "variety": variety,
+            "source_name": source_name,
         }
 
-        update_result = (
-            market_collection.update_one(
-                filter_query,
+        try:
 
-                {
-                    "$set": document,
-
-                    "$setOnInsert": {
-                        "created_at": now
+            result = (
+                market_collection
+                .update_one(
+                    filter_query,
+                    {
+                        "$set": document,
+                        "$setOnInsert": {
+                            "created_at": now
+                        },
                     },
-                },
-
-                upsert=True
+                    upsert=True
+                )
             )
-        )
 
-        if (
-            update_result.upserted_id
-            is not None
-        ):
+            if result.upserted_id is not None:
 
-            inserted += 1
+                inserted += 1
 
-        elif update_result.modified_count:
+            elif result.modified_count:
 
-            updated += 1
+                updated += 1
+
+        except PyMongoError as exc:
+
+            print(
+                "MongoDB save error:",
+                repr(exc)
+            )
+
+            skipped += 1
 
     return {
-
         "inserted": inserted,
-
         "updated": updated,
-
-        "total_processed":
-            len(records),
-
+        "skipped": skipped,
+        "total_processed": len(records),
     }
 
 
 # ============================================================
-# GET LATEST RECORD
+# LATEST RECORD
 # ============================================================
 
-def get_latest_record(
-    crop
-):
+def get_latest_record(crop):
 
     if not mongodb_ready():
         return None
 
     document = (
-        market_collection.find_one(
+        market_collection
+        .find_one(
             {
                 "crop": crop
             },
-
             sort=[
                 (
                     "data_date",
                     DESCENDING
                 ),
-
                 (
                     "updated_at",
                     DESCENDING
@@ -886,7 +539,7 @@ def get_latest_record(
 
 
 # ============================================================
-# GET HISTORICAL DATA
+# HISTORY
 # ============================================================
 
 def get_history(
@@ -898,11 +551,11 @@ def get_history(
         return []
 
     cursor = (
-        market_collection.find(
+        market_collection
+        .find(
             {
                 "crop": crop
             },
-
             {
                 "_id": 0
             }
@@ -913,7 +566,6 @@ def get_history(
                     "data_date",
                     DESCENDING
                 ),
-
                 (
                     "updated_at",
                     DESCENDING
@@ -927,28 +579,21 @@ def get_history(
         serialize_document(
             document
         )
-
         for document in cursor
     ]
 
 
-# ============================================================
-# GET LAST SCRAPE TIME
-# ============================================================
-
-def get_last_scraped(
-    crop
-):
+def get_last_scraped(crop):
 
     if not mongodb_ready():
         return None
 
     document = (
-        market_collection.find_one(
+        market_collection
+        .find_one(
             {
                 "crop": crop
             },
-
             sort=[
                 (
                     "updated_at",
@@ -967,35 +612,23 @@ def get_last_scraped(
 
 
 # ============================================================
-# SCRAPER REFRESH
+# SCRAPER
 # ============================================================
 
-def refresh_crop(
-    crop
-):
-    """
-    Scrape the crop and save ALL returned historical
-    records into MongoDB.
-    """
+def refresh_crop(crop):
 
     print(
-        f"Refreshing {crop} market history..."
+        f"Refreshing {crop} from NaPanta..."
     )
 
-    scraper_result = scrape_crop(
-        crop
-    )
-
-    records = normalize_scraper_result(
-        scraper_result,
+    records = scrape_crop(
         crop
     )
 
     if not records:
 
         raise RuntimeError(
-            f"Scraper returned no valid "
-            f"historical records for {crop}."
+            f"No records returned for {crop}."
         )
 
     database_result = save_records(
@@ -1007,28 +640,16 @@ def refresh_crop(
     )
 
     return {
-
         "crop": crop,
-
-        "scraped_records":
-            len(records),
-
-        "database":
-            database_result,
-
-        "latest":
-            latest,
-
+        "scraped_records": len(
+            records
+        ),
+        "database": database_result,
+        "latest": latest,
     }
 
 
-# ============================================================
-# SHOULD REFRESH
-# ============================================================
-
-def should_refresh(
-    crop
-):
+def should_refresh(crop):
 
     last_scraped = get_last_scraped(
         crop
@@ -1060,20 +681,14 @@ def should_refresh(
     )
 
 
-# ============================================================
-# ENSURE DATA
-# ============================================================
-
-def ensure_crop_data(
-    crop
-):
+def ensure_crop_data(crop):
 
     latest = get_latest_record(
         crop
     )
 
     # --------------------------------------------------------
-    # Existing MongoDB data is available and fresh.
+    # Use MongoDB when recent enough.
     # --------------------------------------------------------
 
     if (
@@ -1087,7 +702,7 @@ def ensure_crop_data(
         )
 
     # --------------------------------------------------------
-    # Try live scrape.
+    # Try live NaPanta refresh.
     # --------------------------------------------------------
 
     try:
@@ -1110,17 +725,12 @@ def ensure_crop_data(
     except Exception as exc:
 
         print(
-            f"Scraper error for {crop}:",
+            f"NaPanta refresh failed "
+            f"for {crop}:",
             repr(exc)
         )
 
-        # ----------------------------------------------------
-        # IMPORTANT:
-        #
-        # If API is temporarily unavailable, continue using
-        # historical MongoDB data.
-        # ----------------------------------------------------
-
+        # Existing MongoDB data remains usable.
         if latest:
 
             return (
@@ -1138,48 +748,46 @@ def ensure_crop_data(
         )
 
     raise RuntimeError(
-        f"No market data available for {crop}."
+        f"No market data available "
+        f"for {crop}."
     )
 
 
 # ============================================================
-# HISTORICAL PRICE EXTRACTION
+# PRICE EXTRACTION
 # ============================================================
 
-def extract_prices(
-    history
-):
+def get_record_price(record):
 
-    prices = []
+    value = (
+        record.get(
+            "modal_price"
+        )
+        if record
+        else None
+    )
 
-    for row in history:
+    if value is None and record:
 
-        price = (
-            row.get(
-                "modal_price"
-            )
-            or row.get(
-                "price"
-            )
+        value = record.get(
+            "price"
         )
 
-        if price is None:
-            continue
+    if value is None:
+        return None
 
-        try:
+    try:
 
-            prices.append(
-                float(price)
-            )
+        return float(
+            value
+        )
 
-        except (
-            TypeError,
-            ValueError
-        ):
+    except (
+        TypeError,
+        ValueError
+    ):
 
-            continue
-
-    return prices
+        return None
 
 
 # ============================================================
@@ -1193,23 +801,29 @@ def calculate_trend(
 
     history = get_history(
         crop,
-        12
+        10
     )
 
-    prices = extract_prices(
-        history
-    )
+    prices = []
+
+    for row in history:
+
+        price = get_record_price(
+            row
+        )
+
+        if price is not None:
+
+            prices.append(
+                price
+            )
 
     if len(prices) < 2:
 
         return {
-
             "trend": "Stable",
-
             "change": 0,
-
             "change_percent": 0,
-
         }
 
     previous_price = prices[1]
@@ -1217,13 +831,9 @@ def calculate_trend(
     if previous_price <= 0:
 
         return {
-
             "trend": "Stable",
-
             "change": 0,
-
             "change_percent": 0,
-
         }
 
     change = (
@@ -1249,19 +859,15 @@ def calculate_trend(
         trend = "Stable"
 
     return {
-
         "trend": trend,
-
         "change": round(
             change,
             2
         ),
-
         "change_percent": round(
             change_percent,
             2
         ),
-
     }
 
 
@@ -1273,129 +879,79 @@ def calculate_forecast(
     crop,
     current_price
 ):
-    """
-    Forecast future price using historical MongoDB data.
 
-    This is intentionally a simple conservative model.
-
-    It uses:
-
-    1. Historical average
-    2. Recent price movement
-    3. Recent trend
-
-    The important point is that the prediction is based on
-    the historical dataset stored in MongoDB.
-    """
-
+    # Use recent daily history.
     history = get_history(
         crop,
-        12
+        30
     )
 
-    prices = extract_prices(
-        history
-    )
+    prices = []
 
-    if len(prices) == 0:
+    for row in history:
 
-        return {
+        price = get_record_price(
+            row
+        )
 
-            "forecast_price":
-                round(current_price),
+        if price is not None:
 
-            "forecast_change_percent":
-                0,
+            prices.append(
+                price
+            )
 
-            "message":
-                "Not enough historical data "
-                "for a forecast.",
-
-            "history_points": 0,
-
-        }
-
-    # --------------------------------------------------------
-    # One record only.
-    # --------------------------------------------------------
-
-    if len(prices) == 1:
+    if len(prices) < 2:
 
         forecast = current_price
 
     else:
 
-        # Most recent prices are first because MongoDB sorts
-        # descending.
-        #
-        # Example:
-        #
-        # prices[0] = latest
-        # prices[1] = previous month
-        # prices[2] = two months ago
-        # ...
+        # ----------------------------------------------------
+        # Recent weighted average.
+        # ----------------------------------------------------
 
         recent_prices = prices[
-            :6
+            :7
         ]
 
-        historical_average = (
+        average = (
             sum(recent_prices)
             / len(recent_prices)
         )
 
-        previous_price = prices[
-            1
-        ]
+        # Most recent movement.
+        previous = prices[1]
 
-        # Recent movement.
         movement = (
             current_price
-            - previous_price
+            - previous
         )
 
-        # Trend component.
-        #
-        # 0.35 means only part of the latest movement
-        # is projected forward.
-        trend_component = (
-            movement
-            * 0.35
-        )
-
-        # Average component.
-        average_component = (
-            historical_average
-            * 0.65
-        )
-
+        # Conservative short-term forecast.
         forecast = (
-            average_component
-            + trend_component
+            average
+            + movement * 0.5
         )
 
     # --------------------------------------------------------
-    # Conservative safety boundaries.
-    #
-    # Prevent a bad/outlier record from generating an absurd
-    # forecast.
+    # Conservative forecast boundary.
     # --------------------------------------------------------
 
-    lower_bound = (
+    minimum = (
         current_price
         * 0.75
     )
 
-    upper_bound = (
+    maximum = (
         current_price
         * 1.35
     )
 
     forecast = max(
-        lower_bound,
+        minimum,
         min(
             forecast,
-            upper_bound
+            maximum
         )
     )
 
@@ -1403,7 +959,11 @@ def calculate_forecast(
         forecast
     )
 
-    if current_price > 0:
+    if current_price <= 0:
+
+        change_percent = 0
+
+    else:
 
         change_percent = (
             (
@@ -1413,49 +973,34 @@ def calculate_forecast(
             / current_price
         ) * 100
 
-    else:
-
-        change_percent = 0
-
     if change_percent > 3:
 
         message = (
-            "Prices may increase based on "
-            "recent historical market movement."
+            "Prices may increase based "
+            "on recent daily market movement."
         )
 
     elif change_percent < -3:
 
         message = (
-            "Prices may weaken based on "
-            "recent historical market movement."
+            "Prices may weaken based "
+            "on recent daily market movement."
         )
 
     else:
 
         message = (
             "Prices are expected to remain "
-            "relatively stable based on "
-            "recent historical data."
+            "relatively stable."
         )
 
     return {
-
-        "forecast_price":
-            forecast,
-
-        "forecast_change_percent":
-            round(
-                change_percent,
-                2
-            ),
-
-        "message":
-            message,
-
-        "history_points":
-            len(prices),
-
+        "forecast_price": forecast,
+        "forecast_change_percent": round(
+            change_percent,
+            2
+        ),
+        "message": message,
     }
 
 
@@ -1463,9 +1008,7 @@ def calculate_forecast(
 # DEMAND
 # ============================================================
 
-def calculate_demand(
-    trend
-):
+def calculate_demand(trend):
 
     if trend == "Increasing":
         return "High"
@@ -1477,7 +1020,7 @@ def calculate_demand(
 
 
 # ============================================================
-# FARMER DECISION
+# DECISION
 # ============================================================
 
 def calculate_decision(
@@ -1504,8 +1047,7 @@ def calculate_decision(
         action = "Store"
 
         reason = (
-            "Historical market data indicates "
-            "that the expected future price is "
+            "The expected future price is "
             "significantly higher than the "
             "current market price."
         )
@@ -1518,8 +1060,9 @@ def calculate_decision(
         action = "Sell Now"
 
         reason = (
-            "The current market price is strong "
-            "relative to the estimated future price."
+            "The current market price is "
+            "strong relative to the expected "
+            "future price."
         )
 
     elif trend == "Increasing":
@@ -1527,9 +1070,9 @@ def calculate_decision(
         action = "Store"
 
         reason = (
-            "The historical market trend is "
-            "increasing, so holding may provide "
-            "an opportunity."
+            "The recent daily market trend "
+            "is increasing, so holding may "
+            "provide an opportunity."
         )
 
     else:
@@ -1537,39 +1080,28 @@ def calculate_decision(
         action = "Sell Now"
 
         reason = (
-            "The expected improvement is not "
-            "large enough to clearly justify "
-            "waiting."
+            "The expected improvement is "
+            "not large enough to clearly "
+            "justify waiting."
         )
 
     return {
-
-        "sell_now":
-            round(
-                current_price
-            ),
-
-        "store":
-            round(
-                forecast_price
-            ),
-
-        "transport":
-            round(
-                transport_value
-            ),
-
-        "best_action":
-            action,
-
-        "reason":
-            reason,
-
+        "sell_now": round(
+            current_price
+        ),
+        "store": round(
+            forecast_price
+        ),
+        "transport": round(
+            transport_value
+        ),
+        "best_action": action,
+        "reason": reason,
     }
 
 
 # ============================================================
-# MAIN MARKET API
+# MARKET API
 # ============================================================
 
 @app.route(
@@ -1586,26 +1118,21 @@ def market_api():
     if crop not in SUPPORTED_CROPS:
 
         return jsonify({
-
             "success": False,
-
-            "error":
-                "Supported crops: onion, wheat",
-
+            "error": (
+                "Supported crops: "
+                "onion, wheat"
+            ),
         }), 400
 
     if not mongodb_ready():
 
         return jsonify({
-
             "success": False,
-
-            "error":
-                "MongoDB is not connected.",
-
-            "database":
-                "MongoDB not connected",
-
+            "error": (
+                "MongoDB is not connected. "
+                "Configure MONGODB_URI in Render."
+            ),
         }), 503
 
     try:
@@ -1616,20 +1143,22 @@ def market_api():
             )
         )
 
-        current_price = float(
-            market_data.get(
-                "modal_price"
-            )
-            or market_data.get(
-                "price"
+        current_price = (
+            get_record_price(
+                market_data
             )
         )
 
-        trend_data = (
-            calculate_trend(
-                crop,
-                current_price
+        if current_price is None:
+
+            raise RuntimeError(
+                "Market record does not "
+                "contain a valid modal price."
             )
+
+        trend_data = calculate_trend(
+            crop,
+            current_price
         )
 
         forecast_data = (
@@ -1645,142 +1174,131 @@ def market_api():
             ]
         )
 
-        decision = (
-            calculate_decision(
-                current_price,
-                forecast_data[
-                    "forecast_price"
-                ],
-                trend_data[
-                    "trend"
-                ]
-            )
+        decision = calculate_decision(
+            current_price,
+            forecast_data[
+                "forecast_price"
+            ],
+            trend_data[
+                "trend"
+            ]
         )
 
         if status == "scraped":
 
             message = (
-                "Latest market data was "
-                "retrieved from Agmarknet CEDA "
-                "and historical records were "
-                "saved to MongoDB."
+                "Latest available market "
+                "data was scraped from NaPanta "
+                "and saved to MongoDB."
             )
 
         elif status == "historical_fallback":
 
             message = (
-                "Live market retrieval was "
+                "Live NaPanta scraping was "
                 "temporarily unavailable. "
-                "Using the latest historical "
+                "Showing the latest market "
                 "record stored in MongoDB."
             )
 
         else:
 
             message = (
-                "Using the latest market record "
-                "stored in MongoDB."
+                "Showing the latest available "
+                "market record stored in MongoDB."
             )
 
         return jsonify({
 
-            "success":
-                True,
+            "success": True,
 
-            "crop":
-                crop,
+            "crop": crop,
 
-            "market":
-                market_data.get(
-                    "market",
-                    "Kopargaon"
-                ),
+            "market": market_data.get(
+                "market",
+                "Kopargaon"
+            ),
 
-            "district":
-                market_data.get(
-                    "district",
-                    "Ahmadnagar"
-                ),
+            "district": market_data.get(
+                "district",
+                "Ahilyanagar"
+            ),
 
-            "commodity":
-                market_data.get(
-                    "commodity",
-                    crop.title()
-                ),
+            "state": market_data.get(
+                "state",
+                "Maharashtra"
+            ),
 
-            "current_price":
-                round(
-                    current_price
-                ),
+            "commodity": market_data.get(
+                "commodity",
+                crop.title()
+            ),
 
-            "price":
-                round(
-                    current_price
-                ),
+            "variety": market_data.get(
+                "variety",
+                ""
+            ),
 
-            "min_price":
-                market_data.get(
-                    "min_price"
-                ),
+            "current_price": round(
+                current_price
+            ),
 
-            "max_price":
-                market_data.get(
-                    "max_price"
-                ),
+            "price": round(
+                current_price
+            ),
 
-            "modal_price":
-                market_data.get(
-                    "modal_price"
-                ),
+            "min_price": market_data.get(
+                "min_price"
+            ),
 
-            "latest_date":
-                market_data.get(
-                    "data_date"
-                ),
+            "max_price": market_data.get(
+                "max_price"
+            ),
 
-            "data_date":
-                market_data.get(
-                    "data_date"
-                ),
+            "modal_price": market_data.get(
+                "modal_price"
+            ),
 
-            "source":
-                market_data.get(
-                    "source_name",
-                    "Agmarknet CEDA API"
-                ),
+            "latest_date": market_data.get(
+                "data_date"
+            ),
 
-            "source_url":
-                market_data.get(
-                    "source_url",
-                    AGMARKNET_API_URL
-                ),
+            "data_date": market_data.get(
+                "data_date"
+            ),
 
-            "api_url":
-                AGMARKNET_API_URL,
+            "source": market_data.get(
+                "source_name",
+                "NaPanta"
+            ),
 
-            "data_status":
-                status,
+            "source_name": market_data.get(
+                "source_name",
+                "NaPanta"
+            ),
 
-            "message":
-                message,
+            "source_url": market_data.get(
+                "source_url",
+                ""
+            ),
 
-            "trend":
-                trend_data[
-                    "trend"
-                ],
+            "data_status": status,
 
-            "price_change":
-                trend_data[
-                    "change"
-                ],
+            "message": message,
 
-            "change_percent":
-                trend_data[
-                    "change_percent"
-                ],
+            "trend": trend_data[
+                "trend"
+            ],
 
-            "demand":
-                demand,
+            "price_change": trend_data[
+                "change"
+            ],
+
+            "change_percent": trend_data[
+                "change_percent"
+            ],
+
+            "demand": demand,
 
             "forecast_price":
                 forecast_data[
@@ -1795,11 +1313,6 @@ def market_api():
             "forecast_message":
                 forecast_data[
                     "message"
-                ],
-
-            "history_points":
-                forecast_data[
-                    "history_points"
                 ],
 
             "sell_now":
@@ -1842,22 +1355,16 @@ def market_api():
         )
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "Unable to obtain real "
-                "market data.",
-
-            "details":
-                str(exc),
-
-        }), 500
+            "success": False,
+            "error": (
+                "Unable to obtain market data."
+            ),
+            "details": str(exc),
+        }), 503
 
 
 # ============================================================
-# HISTORICAL DATA API
+# HISTORY API
 # ============================================================
 
 @app.route(
@@ -1888,32 +1395,24 @@ def market_history():
         1,
         min(
             limit,
-            365
+            3650
         )
     )
 
     if crop not in SUPPORTED_CROPS:
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "Unsupported crop",
-
+            "success": False,
+            "error": "Unsupported crop",
         }), 400
 
     if not mongodb_ready():
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "MongoDB is not connected.",
-
+            "success": False,
+            "error": (
+                "MongoDB is not connected."
+            ),
         }), 503
 
     history = get_history(
@@ -1923,85 +1422,15 @@ def market_history():
 
     return jsonify({
 
-        "success":
-            True,
+        "success": True,
 
-        "crop":
-            crop,
+        "crop": crop,
 
-        "count":
-            len(history),
+        "count": len(
+            history
+        ),
 
-        "history":
-            history,
-
-    })
-
-
-# ============================================================
-# DATABASE SUMMARY
-# ============================================================
-
-@app.route(
-    "/api/market/database",
-    methods=["GET"]
-)
-def market_database():
-
-    if not mongodb_ready():
-
-        return jsonify({
-
-            "success":
-                False,
-
-            "mongodb_connected":
-                False,
-
-            "error":
-                "MongoDB is not connected.",
-
-        }), 503
-
-    result = {}
-
-    for crop in SUPPORTED_CROPS:
-
-        count = (
-            market_collection.count_documents(
-                {
-                    "crop": crop
-                }
-            )
-        )
-
-        latest = get_latest_record(
-            crop
-        )
-
-        result[crop] = {
-
-            "records":
-                count,
-
-            "latest":
-                latest,
-
-        }
-
-    return jsonify({
-
-        "success":
-            True,
-
-        "database":
-            MONGODB_DB_NAME,
-
-        "collection":
-            MONGODB_COLLECTION,
-
-        "crops":
-            result,
+        "history": history,
 
     })
 
@@ -2042,13 +1471,8 @@ def market_refresh():
         if crop not in SUPPORTED_CROPS:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "Unsupported crop",
-
+                "success": False,
+                "error": "Unsupported crop",
             }), 400
 
         crops = [
@@ -2057,21 +1481,10 @@ def market_refresh():
 
     else:
 
-        crops = list(
-            SUPPORTED_CROPS
-        )
-
-    if not mongodb_ready():
-
-        return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "MongoDB is not connected.",
-
-        }), 503
+        crops = [
+            "onion",
+            "wheat",
+        ]
 
     results = {}
 
@@ -2088,31 +1501,21 @@ def market_refresh():
         except Exception as exc:
 
             print(
-                f"Refresh failed for "
-                f"{selected_crop}:",
+                f"Refresh error "
+                f"for {selected_crop}:",
                 repr(exc)
             )
 
             results[
                 selected_crop
             ] = {
-
-                "success":
-                    False,
-
-                "error":
-                    str(exc),
-
+                "success": False,
+                "error": str(exc),
             }
 
     return jsonify({
-
-        "success":
-            True,
-
-        "results":
-            results,
-
+        "success": True,
+        "results": results,
     })
 
 
@@ -2121,35 +1524,22 @@ def market_refresh():
 # ============================================================
 
 CSV_FIELDS = [
-
     "crop",
-
     "market",
-
     "district",
-
+    "state",
     "commodity",
-
     "variety",
-
+    "grade",
     "min_price",
-
     "max_price",
-
     "modal_price",
-
     "price",
-
     "data_date",
-
     "source",
-
     "source_name",
-
     "source_url",
-
     "scraped_at",
-
 ]
 
 
@@ -2170,25 +1560,17 @@ def export_csv():
         if crop not in SUPPORTED_CROPS:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "Unsupported crop",
-
+                "success": False,
+                "error": "Unsupported crop",
             }), 400
 
     if not mongodb_ready():
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "MongoDB is not connected.",
-
+            "success": False,
+            "error": (
+                "MongoDB is not connected."
+            ),
         }), 503
 
     query = {}
@@ -2200,7 +1582,8 @@ def export_csv():
         ] = crop
 
     cursor = (
-        market_collection.find(
+        market_collection
+        .find(
             query,
             {
                 "_id": 0
@@ -2212,7 +1595,6 @@ def export_csv():
                     "crop",
                     ASCENDING
                 ),
-
                 (
                     "data_date",
                     DESCENDING
@@ -2239,17 +1621,15 @@ def export_csv():
             document
         )
 
-        writer.writerow({
-
-            field:
-                row.get(
+        writer.writerow(
+            {
+                field: row.get(
                     field,
                     ""
                 )
-
-            for field in CSV_FIELDS
-
-        })
+                for field in CSV_FIELDS
+            }
+        )
 
     output.seek(0)
 
@@ -2260,19 +1640,14 @@ def export_csv():
     )
 
     return send_file(
-
         io.BytesIO(
             output.getvalue().encode(
                 "utf-8"
             )
         ),
-
         mimetype="text/csv",
-
         as_attachment=True,
-
         download_name=filename,
-
     )
 
 
@@ -2289,42 +1664,33 @@ def import_csv():
     if not mongodb_ready():
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "MongoDB is not connected.",
-
+            "success": False,
+            "error": (
+                "MongoDB is not connected."
+            ),
         }), 503
 
     if "file" not in request.files:
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
+            "success": False,
+            "error": (
                 "Attach a CSV file using "
-                "the form field 'file'.",
-
+                "the form field 'file'."
+            ),
         }), 400
 
-    uploaded_file = request.files[
-        "file"
-    ]
+    uploaded_file = (
+        request.files[
+            "file"
+        ]
+    )
 
     if not uploaded_file.filename:
 
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                "No file selected.",
-
+            "success": False,
+            "error": "No file selected.",
         }), 400
 
     try:
@@ -2338,34 +1704,203 @@ def import_csv():
         )
 
         reader = csv.DictReader(
-            io.StringIO(text)
+            io.StringIO(
+                text
+            )
         )
 
         records = []
 
         for row in reader:
 
-            normalized = normalize_record(
-                row
+            crop = (
+                row.get(
+                    "crop",
+                    ""
+                )
+                .strip()
+                .lower()
             )
 
-            if normalized:
+            if crop not in SUPPORTED_CROPS:
+                continue
 
-                records.append(
-                    normalized
+            data_date = (
+                row.get(
+                    "data_date",
+                    ""
                 )
+                .strip()
+            )
+
+            if not data_date:
+                continue
+
+            market = (
+                row.get(
+                    "market",
+                    "Kopargaon"
+                )
+                .strip()
+            )
+
+            if not market:
+                market = "Kopargaon"
+
+            modal_value = (
+                row.get(
+                    "modal_price"
+                )
+                or row.get(
+                    "price"
+                )
+            )
+
+            def parse_float(
+                value
+            ):
+
+                if value in (
+                    None,
+                    ""
+                ):
+
+                    return None
+
+                try:
+
+                    return float(
+                        str(value)
+                        .replace(
+                            ",",
+                            ""
+                        )
+                        .replace(
+                            "₹",
+                            ""
+                        )
+                        .strip()
+                    )
+
+                except (
+                    ValueError,
+                    TypeError
+                ):
+
+                    return None
+
+            modal_price = parse_float(
+                modal_value
+            )
+
+            if modal_price is None:
+                continue
+
+            records.append({
+
+                "crop": crop,
+
+                "market": market,
+
+                "district": (
+                    row.get(
+                        "district",
+                        "Ahilyanagar"
+                    )
+                    .strip()
+                ),
+
+                "state": (
+                    row.get(
+                        "state",
+                        "Maharashtra"
+                    )
+                    .strip()
+                ),
+
+                "commodity": (
+                    row.get(
+                        "commodity",
+                        crop.title()
+                    )
+                    .strip()
+                ),
+
+                "variety": (
+                    row.get(
+                        "variety",
+                        ""
+                    )
+                    .strip()
+                ),
+
+                "grade": (
+                    row.get(
+                        "grade",
+                        ""
+                    )
+                    .strip()
+                ),
+
+                "min_price": parse_float(
+                    row.get(
+                        "min_price"
+                    )
+                ),
+
+                "max_price": parse_float(
+                    row.get(
+                        "max_price"
+                    )
+                ),
+
+                "modal_price":
+                    modal_price,
+
+                "price":
+                    modal_price,
+
+                "data_date":
+                    data_date,
+
+                "source": (
+                    row.get(
+                        "source",
+                        "CSV import"
+                    )
+                    .strip()
+                ),
+
+                "source_name": (
+                    row.get(
+                        "source_name",
+                        "CSV import"
+                    )
+                    .strip()
+                ),
+
+                "source_url": (
+                    row.get(
+                        "source_url",
+                        ""
+                    )
+                    .strip()
+                ),
+
+                "scraped_at":
+                    datetime.now(
+                        timezone.utc
+                    ),
+            })
 
         if not records:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
+                "success": False,
+                "error": (
                     "No valid market records "
-                    "were found in the CSV.",
-
+                    "were found in the CSV."
+                ),
             }), 400
 
         result = save_records(
@@ -2374,29 +1909,87 @@ def import_csv():
 
         return jsonify({
 
-            "success":
-                True,
+            "success": True,
 
-            "message":
-                "Historical CSV records imported "
-                "into MongoDB.",
+            "message": (
+                "CSV records imported "
+                "into MongoDB."
+            ),
 
-            "records":
-                result,
+            "records": result,
 
         })
 
     except Exception as exc:
 
+        print(
+            "CSV import error:",
+            repr(exc)
+        )
+
         return jsonify({
-
-            "success":
-                False,
-
-            "error":
-                str(exc),
-
+            "success": False,
+            "error": str(exc),
         }), 400
+
+
+# ============================================================
+# DATABASE STATS
+# ============================================================
+
+@app.route(
+    "/api/market/stats",
+    methods=["GET"]
+)
+def market_stats():
+
+    if not mongodb_ready():
+
+        return jsonify({
+            "success": False,
+            "error": (
+                "MongoDB is not connected."
+            ),
+        }), 503
+
+    stats = {}
+
+    for crop in [
+        "onion",
+        "wheat",
+    ]:
+
+        count = market_collection.count_documents(
+            {
+                "crop": crop
+            }
+        )
+
+        latest = get_latest_record(
+            crop
+        )
+
+        stats[
+            crop
+        ] = {
+            "records": count,
+            "latest": latest,
+        }
+
+    return jsonify({
+
+        "success": True,
+
+        "database":
+            MONGODB_DB_NAME,
+
+        "collection":
+            MONGODB_COLLECTION,
+
+        "stats":
+            stats,
+
+    })
 
 
 # ============================================================
@@ -2410,40 +2003,17 @@ def import_csv():
 def status():
 
     latest = {
-
-        "onion":
-            get_latest_record(
-                "onion"
-            ),
-
-        "wheat":
-            get_latest_record(
-                "wheat"
-            ),
-
+        "onion": get_latest_record(
+            "onion"
+        ),
+        "wheat": get_latest_record(
+            "wheat"
+        ),
     }
-
-    database_counts = {}
-
-    if mongodb_ready():
-
-        for crop in SUPPORTED_CROPS:
-
-            database_counts[
-                crop
-            ] = (
-                market_collection
-                .count_documents(
-                    {
-                        "crop": crop
-                    }
-                )
-            )
 
     return jsonify({
 
-        "success":
-            True,
+        "success": True,
 
         "service":
             "SmartAgri Kopargaon",
@@ -2455,7 +2025,8 @@ def status():
             (
                 "MongoDB"
                 if mongodb_ready()
-                else "MongoDB not connected"
+                else
+                "MongoDB not connected"
             ),
 
         "mongodb_connected":
@@ -2467,14 +2038,11 @@ def status():
         "collection":
             MONGODB_COLLECTION,
 
-        "database_records":
-            database_counts,
-
         "scraper":
-            "Agmarknet CEDA API",
+            "NaPanta Daily",
 
         "api_url":
-            AGMARKNET_API_URL,
+            "https://www.napanta.com",
 
         "latest":
             latest,
@@ -2539,7 +2107,8 @@ def home():
             (
                 "MongoDB"
                 if mongodb_ready()
-                else "MongoDB not connected"
+                else
+                "MongoDB not connected"
             ),
 
         "endpoints": [
@@ -2552,15 +2121,19 @@ def home():
 
             "/api/market/history?crop=wheat",
 
-            "/api/market/database",
-
             "/api/market/refresh?crop=onion",
 
             "/api/market/refresh?crop=wheat",
 
             "/api/market/export-csv",
 
+            "/api/market/export-csv?crop=onion",
+
+            "/api/market/export-csv?crop=wheat",
+
             "/api/market/import-csv",
+
+            "/api/market/stats",
 
             "/api/status",
 
@@ -2581,13 +2154,9 @@ def home():
 def static_files(filename):
 
     safe_files = {
-
         "index.html",
-
         "style.css",
-
         "script.js",
-
     }
 
     if filename in safe_files:
@@ -2598,10 +2167,7 @@ def static_files(filename):
         )
 
     return jsonify({
-
-        "error":
-            "Not Found"
-
+        "error": "Not Found"
     }), 404
 
 
@@ -2620,7 +2186,7 @@ if __name__ == "__main__":
     )
 
     print(
-        " Agmarknet CEDA + MongoDB"
+        " NaPanta + MongoDB + Forecast"
     )
 
     print(
@@ -2643,8 +2209,8 @@ if __name__ == "__main__":
     )
 
     print(
-        f"Agmarknet API: "
-        f"{AGMARKNET_API_URL}"
+        f"Scrape interval: "
+        f"{SCRAPE_INTERVAL_HOURS} hours"
     )
 
     print(
