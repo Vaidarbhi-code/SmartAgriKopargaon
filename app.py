@@ -1,30 +1,53 @@
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import requests
-from bs4 import BeautifulSoup
+from datetime import datetime, timezone
+import os
 import re
 
-app = Flask(__name__, static_folder=".")
-CORS(app)
 
 # ============================================================
 # SMARTAGRI KOPARGAON
-# LATEST MARKET DATA
+# ============================================================
+# Live/latest external market data
 #
-# Source:
-# MandiPulse
-# Data is compiled from Agmarknet / Government market data.
+# Supported crops:
+#   - Onion
+#   - Wheat
 #
-# NO HARDCODED PRICES
-# NO FALLBACK PRICES
+# Target market:
+#   Kopargaon APMC
+#   Ahilyanagar, Maharashtra
+#
+# No hardcoded prices.
+# No fallback prices.
 # ============================================================
 
-BASE_URL = "https://mandipulse.com/mandi/maharashtra-ahilyanagar-kopargaon-apmc"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    static_folder=BASE_DIR
+)
+
+CORS(app)
+
+
+# ============================================================
+# MARKET SOURCE
+# ============================================================
+
+BASE_URL = (
+    "https://mandipulse.com/"
+    "mandi/maharashtra-ahilyanagar-kopargaon-apmc"
+)
 
 CROP_URLS = {
     "onion": f"{BASE_URL}/onion",
     "wheat": f"{BASE_URL}/wheat"
 }
+
 
 HEADERS = {
     "User-Agent": (
@@ -32,58 +55,102 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/151.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": (
+        "text/html,application/xhtml+xml,"
+        "application/xml;q=0.9,*/*;q=0.8"
+    ),
     "Accept-Language": "en-US,en;q=0.9",
 }
 
 
 # ============================================================
-# NUMBER EXTRACTION
+# TARGET MARKET
 # ============================================================
 
-def extract_number(text):
-    if not text:
+MARKET_NAME = "Kopargaon APMC"
+DISTRICT_NAME = "Ahilyanagar"
+STATE_NAME = "Maharashtra"
+
+
+# ============================================================
+# CROP NAMES
+# ============================================================
+
+CROP_NAMES = {
+    "onion": "Onion",
+    "wheat": "Wheat"
+}
+
+
+# ============================================================
+# NUMBER PARSER
+# ============================================================
+
+def extract_number(value):
+    """
+    Extract the first numeric value from text.
+
+    Examples:
+        ₹2,500
+        2500
+        Rs. 2500
+    """
+
+    if value is None:
         return None
+
+    text = str(value)
 
     text = text.replace(",", "")
 
-    match = re.search(r"₹?\s*(\d+(?:\.\d+)?)", text)
+    match = re.search(
+        r"\d+(?:\.\d+)?",
+        text
+    )
 
     if not match:
         return None
 
-    value = float(match.group(1))
+    number = float(match.group(0))
 
-    if value.is_integer():
-        return int(value)
+    if number.is_integer():
+        return int(number)
 
-    return value
+    return number
 
 
 # ============================================================
-# FETCH PAGE
+# FETCH MARKET PAGE
 # ============================================================
 
 def fetch_market_page(crop):
 
     if crop not in CROP_URLS:
+
         raise ValueError(
-            "Unsupported crop. Use onion or wheat."
+            "Unsupported crop. "
+            "Use onion or wheat."
         )
 
     url = CROP_URLS[crop]
 
     print()
-    print("======================================")
+    print("=" * 60)
     print("SMARTAGRI MARKET REQUEST")
+    print("=" * 60)
     print("Crop:", crop)
-    print("Source:", url)
-    print("======================================")
+    print("URL:", url)
+    print("=" * 60)
 
     response = requests.get(
         url,
         headers=HEADERS,
-        timeout=20
+        timeout=30
+    )
+
+    print(
+        "HTTP STATUS:",
+        response.status_code
     )
 
     response.raise_for_status()
@@ -92,170 +159,350 @@ def fetch_market_page(crop):
 
 
 # ============================================================
+# CLEAN TEXT
+# ============================================================
+
+def clean_text(text):
+
+    if not text:
+        return ""
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text.strip()
+
+
+# ============================================================
+# FIND DATE
+# ============================================================
+
+def find_date(text):
+
+    patterns = [
+
+        r"Updated\s+on\s*:\s*"
+        r"([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})",
+
+        r"Updated\s*:\s*"
+        r"([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})",
+
+        r"([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+            return match.group(1)
+
+    return None
+
+
+# ============================================================
+# FIND MIN/MAX PRICE
+# ============================================================
+
+def find_min_max(text):
+
+    patterns = [
+
+        r"Min\s*:\s*₹?\s*([\d,]+)"
+        r"\s*\|\s*"
+        r"Max\s*:\s*₹?\s*([\d,]+)",
+
+        r"Min\s*:\s*₹?\s*([\d,]+)"
+        r"\s+Max\s*:\s*₹?\s*([\d,]+)",
+
+        r"Minimum\s*:\s*₹?\s*([\d,]+)"
+        r".{0,50}?"
+        r"Maximum\s*:\s*₹?\s*([\d,]+)"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            min_price = extract_number(
+                match.group(1)
+            )
+
+            max_price = extract_number(
+                match.group(2)
+            )
+
+            if (
+                min_price is not None
+                and max_price is not None
+            ):
+
+                return (
+                    min_price,
+                    max_price
+                )
+
+    return None, None
+
+
+# ============================================================
+# FIND MODAL PRICE
+# ============================================================
+
+def find_modal_price(text, crop):
+
+    crop_name = CROP_NAMES[crop]
+
+    patterns = [
+
+        # Example:
+        # Onion Price Today ₹2500/Quintal
+        rf"{crop_name}\s+Price\s+Today"
+        r".{0,150}?"
+        r"₹\s*([\d,]+)"
+        r"\s*/\s*Quintal",
+
+        # Generic:
+        # ₹2500/Quintal
+        r"₹\s*([\d,]+)"
+        r"\s*/\s*Quintal",
+
+        # Rs. 2500 / Quintal
+        r"(?:Rs\.?|INR)\s*"
+        r"([\d,]+)"
+        r"\s*/\s*Quintal"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            value = extract_number(
+                match.group(1)
+            )
+
+            if value is not None:
+                return value
+
+    return None
+
+
+# ============================================================
+# FIND VARIETY
+# ============================================================
+
+def find_variety(text):
+
+    patterns = [
+
+        r"Variety\s*:\s*"
+        r"([^|]+)",
+
+        r"Variety\s+"
+        r"([A-Za-z0-9 ._-]+)"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            value = match.group(1).strip()
+
+            if value:
+                return value
+
+    return ""
+
+
+# ============================================================
+# FIND GRADE
+# ============================================================
+
+def find_grade(text):
+
+    patterns = [
+
+        r"Grade\s*:\s*"
+        r"([^|]+)",
+
+        r"Grade\s+"
+        r"([A-Za-z0-9 ._-]+)"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            value = match.group(1).strip()
+
+            if value:
+                return value
+
+    return ""
+
+
+# ============================================================
 # PARSE MARKET PAGE
 # ============================================================
 
-def parse_market_page(html, crop, source_url):
+def parse_market_page(
+    html,
+    crop,
+    source_url
+):
 
-    soup = BeautifulSoup(
-        html,
-        "html.parser"
-    )
+    # BeautifulSoup is intentionally not required.
+    # This keeps the Render deployment simpler.
 
-    # Get all visible page text.
-    text = soup.get_text(
+    text = re.sub(
+        r"<script\b[^>]*>.*?</script>",
         " ",
-        strip=True
+        html,
+        flags=re.IGNORECASE | re.DOTALL
     )
+
+    text = re.sub(
+        r"<style\b[^>]*>.*?</style>",
+        " ",
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+    text = re.sub(
+        r"<[^>]+>",
+        " ",
+        text
+    )
+
+    text = clean_text(text)
+
+    print()
+    print("=" * 60)
+    print("PARSING MARKET PAGE")
+    print("=" * 60)
 
     # --------------------------------------------------------
     # DATE
     # --------------------------------------------------------
 
-    date_match = re.search(
-        r"Updated on:\s*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})",
+    arrival_date = find_date(text)
+
+    # --------------------------------------------------------
+    # MIN/MAX
+    # --------------------------------------------------------
+
+    min_price, max_price = find_min_max(text)
+
+    # --------------------------------------------------------
+    # MODAL
+    # --------------------------------------------------------
+
+    modal_price = find_modal_price(
         text,
-        re.IGNORECASE
-    )
-
-    arrival_date = (
-        date_match.group(1)
-        if date_match
-        else None
-    )
-
-    # --------------------------------------------------------
-    # MIN / MAX
-    # --------------------------------------------------------
-
-    range_match = re.search(
-        r"Min:\s*₹?\s*([\d,]+)"
-        r"\s*\|\s*Max:\s*₹?\s*([\d,]+)",
-        text,
-        re.IGNORECASE
-    )
-
-    if not range_match:
-        raise RuntimeError(
-            "Could not find min/max price on the market page."
-        )
-
-    min_price = extract_number(
-        range_match.group(1)
-    )
-
-    max_price = extract_number(
-        range_match.group(2)
-    )
-
-    # --------------------------------------------------------
-    # MODAL PRICE
-    #
-    # The main price shown in the page title/body is the
-    # reported modal/latest price.
-    # --------------------------------------------------------
-
-    modal_match = re.search(
-        r"#?\s*"
-        + (
-            "Onion"
-            if crop == "onion"
-            else "Wheat"
-        )
-        + r"\s+Price\s+Today.*?"
-        r"₹\s*([\d,]+)\s*/Quintal",
-        text,
-        re.IGNORECASE
-    )
-
-    if not modal_match:
-
-        # Secondary method:
-        # Search the heading/body around "Price Today".
-        modal_match = re.search(
-            r"₹\s*([\d,]+)\s*/Quintal",
-            text,
-            re.IGNORECASE
-        )
-
-    if not modal_match:
-        raise RuntimeError(
-            "Could not find modal price on the market page."
-        )
-
-    modal_price = extract_number(
-        modal_match.group(1)
+        crop
     )
 
     # --------------------------------------------------------
     # VARIETY
     # --------------------------------------------------------
 
-    variety_match = re.search(
-        r"Variety:\s*([^|]+)",
-        text,
-        re.IGNORECASE
-    )
-
-    variety = (
-        variety_match.group(1).strip()
-        if variety_match
-        else ""
-    )
+    variety = find_variety(text)
 
     # --------------------------------------------------------
     # GRADE
     # --------------------------------------------------------
 
-    grade_match = re.search(
-        r"Grade:\s*([^|]+)",
-        text,
-        re.IGNORECASE
-    )
+    grade = find_grade(text)
 
-    grade = (
-        grade_match.group(1).strip()
-        if grade_match
-        else ""
-    )
+    print("Date:", arrival_date)
+    print("Minimum:", min_price)
+    print("Maximum:", max_price)
+    print("Modal:", modal_price)
+    print("Variety:", variety)
+    print("Grade:", grade)
+
+    print("=" * 60)
 
     # --------------------------------------------------------
-    # VALIDATE
+    # VALIDATION
     # --------------------------------------------------------
 
-    if (
-        min_price is None
-        or max_price is None
-        or modal_price is None
-    ):
+    if min_price is None:
+
         raise RuntimeError(
-            "Market page did not contain complete price data."
+            "Could not find minimum price "
+            "on the external market page."
+        )
+
+    if max_price is None:
+
+        raise RuntimeError(
+            "Could not find maximum price "
+            "on the external market page."
+        )
+
+    if modal_price is None:
+
+        raise RuntimeError(
+            "Could not find modal price "
+            "on the external market page."
         )
 
     # --------------------------------------------------------
-    # RETURN
+    # RESULT
     # --------------------------------------------------------
 
-    result = {
+    return {
+
         "success": True,
 
         "data_mode": "external_live",
 
-        "source": "MandiPulse / Agmarknet Government Market Data",
+        "source": (
+            "MandiPulse / "
+            "Agmarknet Government Market Data"
+        ),
 
         "source_url": source_url,
 
-        "market": "Kopargaon APMC",
+        "market": MARKET_NAME,
 
-        "district": "Ahilyanagar",
+        "district": DISTRICT_NAME,
 
-        "state": "Maharashtra",
+        "state": STATE_NAME,
 
-        "commodity": (
-            "Onion"
-            if crop == "onion"
-            else "Wheat"
-        ),
+        "commodity": CROP_NAMES[crop],
 
         "variety": variety,
 
@@ -271,14 +518,19 @@ def parse_market_page(html, crop, source_url):
 
         "unit": "Rs./Quintal",
 
+        "retrieved_at": (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        ),
+
+        "fallback": False,
+
         "message": (
-            "Latest available Kopargaon APMC "
-            "market price retrieved from the external "
-            "market-data source."
+            "Latest available external "
+            "market data retrieved successfully."
         )
     }
-
-    return result
 
 
 # ============================================================
@@ -288,26 +540,47 @@ def parse_market_page(html, crop, source_url):
 @app.route("/api/market")
 def market():
 
-    crop = request.args.get(
-        "crop",
-        ""
-    ).strip().lower()
+    crop = (
+        request.args
+        .get("crop", "")
+        .strip()
+        .lower()
+    )
 
     print()
-    print("======================================")
-    print("🌾 SMARTAGRI MARKET ANALYSIS")
+    print("=" * 60)
+    print("SMARTAGRI MARKET ANALYSIS")
+    print("=" * 60)
     print("Selected crop:", crop)
-    print("======================================")
+    print("Market:", MARKET_NAME)
+    print("District:", DISTRICT_NAME)
+    print("State:", STATE_NAME)
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # CROP VALIDATION
+    # --------------------------------------------------------
 
     if crop not in CROP_URLS:
 
         return jsonify({
+
             "success": False,
+
+            "data_mode": "external_live",
+
+            "fallback": False,
+
             "message": (
                 "Unsupported crop. "
                 "Use onion or wheat."
             )
+
         }), 400
+
+    # --------------------------------------------------------
+    # FETCH + PARSE
+    # --------------------------------------------------------
 
     try:
 
@@ -322,48 +595,96 @@ def market():
         )
 
         print()
-        print("======================================")
-        print("✅ MARKET DATA RECEIVED")
-        print("Crop:", result["commodity"])
-        print("Minimum:", result["min_price"])
-        print("Maximum:", result["max_price"])
-        print("Modal:", result["modal_price"])
+        print("=" * 60)
+        print("LIVE MARKET DATA RECEIVED")
+        print("=" * 60)
+        print("Commodity:", result["commodity"])
+        print("Market:", result["market"])
         print("Date:", result["arrival_date"])
-        print("======================================")
-        print()
+        print("Minimum:", result["min_price"])
+        print("Modal:", result["modal_price"])
+        print("Maximum:", result["max_price"])
+        print("=" * 60)
 
-        return jsonify(result)
+        return jsonify(
+            result
+        ), 200
+
+    # --------------------------------------------------------
+    # CONNECTION ERROR
+    # --------------------------------------------------------
 
     except requests.RequestException as error:
 
         print()
-        print("❌ SOURCE CONNECTION ERROR")
+        print("=" * 60)
+        print("SOURCE CONNECTION ERROR")
+        print("=" * 60)
         print(error)
+        print("=" * 60)
 
         return jsonify({
+
             "success": False,
+
             "data_mode": "external_live",
+
+            "fallback": False,
+
             "message": (
-                "Unable to connect to the external "
-                "market-price source."
+                "Unable to connect to the "
+                "external market-price source."
             ),
-            "error": str(error)
+
+            "error": str(error),
+
+            "commodity": CROP_NAMES[crop],
+
+            "market": MARKET_NAME,
+
+            "district": DISTRICT_NAME,
+
+            "state": STATE_NAME
+
         }), 502
+
+    # --------------------------------------------------------
+    # PARSING / OTHER ERROR
+    # --------------------------------------------------------
 
     except Exception as error:
 
         print()
-        print("❌ MARKET DATA ERROR")
+        print("=" * 60)
+        print("MARKET DATA ERROR")
+        print("=" * 60)
         print(error)
+        print("=" * 60)
 
         return jsonify({
+
             "success": False,
+
             "data_mode": "external_live",
+
+            "fallback": False,
+
             "message": (
-                "The external market source did not "
-                "return a usable price record."
+                "The external market source "
+                "did not return a usable "
+                "price record."
             ),
-            "error": str(error)
+
+            "error": str(error),
+
+            "commodity": CROP_NAMES[crop],
+
+            "market": MARKET_NAME,
+
+            "district": DISTRICT_NAME,
+
+            "state": STATE_NAME
+
         }), 502
 
 
@@ -375,23 +696,42 @@ def market():
 def health():
 
     return jsonify({
+
         "success": True,
+
         "backend": "SmartAgri Flask",
-        "market_source": "MandiPulse / Agmarknet",
+
+        "market_source": (
+            "MandiPulse / "
+            "Agmarknet Government Market Data"
+        ),
+
         "mode": "LATEST EXTERNAL DATA",
-        "fallback": False
+
+        "fallback": False,
+
+        "supported_crops": [
+            "onion",
+            "wheat"
+        ],
+
+        "market": MARKET_NAME,
+
+        "district": DISTRICT_NAME,
+
+        "state": STATE_NAME
     })
 
 
 # ============================================================
-# SERVE FRONTEND
+# FRONTEND
 # ============================================================
 
 @app.route("/")
 def home():
 
     return send_from_directory(
-        ".",
+        BASE_DIR,
         "index.html"
     )
 
@@ -400,7 +740,7 @@ def home():
 def files(filename):
 
     return send_from_directory(
-        ".",
+        BASE_DIR,
         filename
     )
 
@@ -412,22 +752,33 @@ def files(filename):
 if __name__ == "__main__":
 
     print()
-    print("======================================")
-    print("🌾 SMARTAGRI KOPARGAON")
-    print("======================================")
+    print("=" * 60)
+    print("SMARTAGRI KOPARGAON")
+    print("=" * 60)
     print("LATEST EXTERNAL MARKET DATA MODE")
     print("NO FALLBACK DATA")
-    print("--------------------------------------")
-    print("🧅 Onion")
-    print("🌾 Wheat")
-    print("--------------------------------------")
+    print("-" * 60)
+    print("Onion")
+    print("Wheat")
+    print("-" * 60)
+    print("Market:", MARKET_NAME)
+    print("District:", DISTRICT_NAME)
+    print("State:", STATE_NAME)
+    print("-" * 60)
     print("Server:")
     print("http://127.0.0.1:5000")
-    print("======================================")
+    print("=" * 60)
     print()
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
 
     app.run(
         host="0.0.0.0",
-        port=5000,
+        port=port,
         debug=True
     )
