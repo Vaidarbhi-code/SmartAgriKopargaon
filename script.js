@@ -1,14 +1,575 @@
-// ============================================================
-// SMARTAGRI KOPARGAON
-// FRONTEND JAVASCRIPT
-// ============================================================
+/* =========================================================
+   SMARTAGRI KOPARGAON
+   FRONTEND APPLICATION
+========================================================= */
 
+"use strict";
+
+
+/* =========================================================
+   TRANSLATIONS
+========================================================= */
+
+const translations = {
+
+    en: {
+
+        location: "📍 Kopargaon",
+
+        navDashboard: "Dashboard",
+        navMarket: "Market",
+        navForecast: "Forecast",
+        navDecision: "Smart Decision",
+
+        heroLabel: "DATA-DRIVEN AGRICULTURE",
+
+        heroTitle:
+            "Smarter Market Decisions.",
+
+        heroTitleSecond:
+            "Better Farm Returns.",
+
+        heroDescription:
+            "Agricultural market intelligence designed to help farmers in Kopargaon decide when, where and how to sell their produce.",
+
+        tagMarket:
+            "📊 Market Intelligence",
+
+        tagAI:
+            "🤖 AI Forecasting",
+
+        tagLive:
+            "📡 Market Data",
+
+        selectCrop:
+            "Select Your Crop",
+
+        selectCropDescription:
+            "Select a crop to analyze current market conditions in Kopargaon.",
+
+        cropLabel:
+            "Crop",
+
+        onion:
+            "🧅 Onion",
+
+        wheat:
+            "🌾 Wheat",
+
+        analyzeMarket:
+            "Analyze Market",
+
+        analyzing:
+            "Analyzing...",
+
+        marketSnapshot:
+            "Market Snapshot",
+
+        marketSnapshotDescription:
+            "Current market conditions for the selected crop.",
+
+        currentPriceLabel:
+            "Current Price",
+
+        perQuintal:
+            "Per Quintal",
+
+        marketTrendLabel:
+            "Market Trend",
+
+        priceMovement:
+            "Price movement",
+
+        demandLabel:
+            "Demand",
+
+        marketIndicator:
+            "Current market indicator",
+
+        forecastTitle:
+            "AI Price Forecast",
+
+        forecastDescription:
+            "Estimated future price based on recent market information.",
+
+        expectedFuturePrice:
+            "EXPECTED FUTURE PRICE",
+
+        forecastInitialMessage:
+            "Select a crop and analyze the market to generate a forecast.",
+
+        marketComparison:
+            "Market Comparison",
+
+        marketComparisonDescription:
+            "Kopargaon market information.",
+
+        marketColumn:
+            "Market",
+
+        priceColumn:
+            "Price / Quintal",
+
+        statusColumn:
+            "Status",
+
+        waiting:
+            "Waiting",
+
+        live:
+            "Live",
+
+        fallback:
+            "Fallback",
+
+        smartSellingDecision:
+            "Smart Selling Decision",
+
+        smartSellingDescription:
+            "Compare possible selling strategies using current market information.",
+
+        sellNow:
+            "Sell Now",
+
+        currentPriceDecision:
+            "Current Price",
+
+        store:
+            "Store",
+
+        estimatedFuturePrice:
+            "Estimated Future Price",
+
+        transport:
+            "Transport",
+
+        estimatedPrice:
+            "Estimated Price",
+
+        smartRecommendation:
+            "SMART RECOMMENDATION",
+
+        recommendedAction:
+            "Recommended Action",
+
+        analyzeMarketFirst:
+            "Analyze the market",
+
+        recommendationInitialMessage:
+            "The system will analyze market data and provide a recommendation.",
+
+        liveDataConnection:
+            "Market Data Connection",
+
+        connectionReady:
+            "Ready to connect to market data.",
+
+        dataSourceDescription:
+            "Market prices are retrieved through the SmartAgri backend.",
+
+        loadingMessage:
+            "Connecting to the SmartAgri market service...",
+
+        successfulMessage:
+            "Market analysis completed successfully.",
+
+        connectionError:
+            "Unable to connect to the SmartAgri backend.",
+
+        invalidResponse:
+            "The backend returned an invalid response.",
+
+        footerFeatures:
+            "Market Intelligence • Multilingual • Mobile-friendly",
+
+        footerCopyright:
+            "Smart Agriculture Market Intelligence System"
+
+    },
+
+
+    mr: {
+
+        location: "📍 कोपरगाव",
+
+        navDashboard: "डॅशबोर्ड",
+        navMarket: "बाजार",
+        navForecast: "अंदाज",
+        navDecision: "स्मार्ट निर्णय",
+
+        heroLabel: "डेटावर आधारित शेती",
+
+        heroTitle:
+            "अधिक स्मार्ट बाजार निर्णय.",
+
+        heroTitleSecond:
+            "शेतीतून अधिक उत्पन्न.",
+
+        heroDescription:
+            "कोपरगावमधील शेतकऱ्यांना त्यांच्या मालाची विक्री केव्हा, कुठे आणि कशी करावी याचा निर्णय घेण्यासाठी कृषी बाजार माहिती.",
+
+        tagMarket:
+            "📊 बाजार माहिती",
+
+        tagAI:
+            "🤖 AI किंमत अंदाज",
+
+        tagLive:
+            "📡 बाजार माहिती",
+
+        selectCrop:
+            "तुमचे पीक निवडा",
+
+        selectCropDescription:
+            "कोपरगावमधील सध्याच्या बाजार परिस्थितीचे विश्लेषण करण्यासाठी पीक निवडा.",
+
+        cropLabel:
+            "पीक",
+
+        onion:
+            "🧅 कांदा",
+
+        wheat:
+            "🌾 गहू",
+
+        analyzeMarket:
+            "बाजाराचे विश्लेषण करा",
+
+        analyzing:
+            "विश्लेषण सुरू आहे...",
+
+        marketSnapshot:
+            "बाजाराचा आढावा",
+
+        marketSnapshotDescription:
+            "निवडलेल्या पिकासाठी सध्याची बाजार परिस्थिती.",
+
+        currentPriceLabel:
+            "सध्याचा भाव",
+
+        perQuintal:
+            "प्रति क्विंटल",
+
+        marketTrendLabel:
+            "बाजारातील कल",
+
+        priceMovement:
+            "किंमतीतील बदल",
+
+        demandLabel:
+            "मागणी",
+
+        marketIndicator:
+            "सध्याचा बाजार निर्देशांक",
+
+        forecastTitle:
+            "AI किंमत अंदाज",
+
+        forecastDescription:
+            "अलीकडील बाजार माहितीवर आधारित अंदाजे भविष्यातील किंमत.",
+
+        expectedFuturePrice:
+            "अपेक्षित भविष्यातील किंमत",
+
+        forecastInitialMessage:
+            "अंदाज मिळवण्यासाठी पीक निवडा आणि बाजाराचे विश्लेषण करा.",
+
+        marketComparison:
+            "बाजार तुलना",
+
+        marketComparisonDescription:
+            "कोपरगाव बाजाराची माहिती.",
+
+        marketColumn:
+            "बाजार",
+
+        priceColumn:
+            "प्रति क्विंटल भाव",
+
+        statusColumn:
+            "स्थिती",
+
+        waiting:
+            "प्रतीक्षा",
+
+        live:
+            "थेट",
+
+        fallback:
+            "पर्यायी",
+
+        smartSellingDecision:
+            "स्मार्ट विक्री निर्णय",
+
+        smartSellingDescription:
+            "सध्याच्या बाजार माहितीच्या आधारे विक्रीच्या पर्यायांची तुलना करा.",
+
+        sellNow:
+            "आता विक्री करा",
+
+        currentPriceDecision:
+            "सध्याचा भाव",
+
+        store:
+            "साठवणूक",
+
+        estimatedFuturePrice:
+            "अंदाजे भविष्यातील भाव",
+
+        transport:
+            "वाहतूक",
+
+        estimatedPrice:
+            "अंदाजे भाव",
+
+        smartRecommendation:
+            "स्मार्ट शिफारस",
+
+        recommendedAction:
+            "शिफारस केलेली कृती",
+
+        analyzeMarketFirst:
+            "बाजाराचे विश्लेषण करा",
+
+        recommendationInitialMessage:
+            "सिस्टम बाजार माहितीचे विश्लेषण करून शिफारस देईल.",
+
+        liveDataConnection:
+            "बाजार डेटा कनेक्शन",
+
+        connectionReady:
+            "बाजार डेटाशी जोडण्यासाठी तयार.",
+
+        dataSourceDescription:
+            "बाजारातील भाव SmartAgri बॅकएंडद्वारे प्राप्त केले जातात.",
+
+        loadingMessage:
+            "SmartAgri बाजार सेवेशी जोडले जात आहे...",
+
+        successfulMessage:
+            "बाजार विश्लेषण यशस्वीरित्या पूर्ण झाले.",
+
+        connectionError:
+            "SmartAgri बॅकएंडशी कनेक्ट होता आले नाही.",
+
+        invalidResponse:
+            "बॅकएंडकडून चुकीचा प्रतिसाद मिळाला.",
+
+        footerFeatures:
+            "बाजार माहिती • बहुभाषिक • मोबाईल-अनुकूल",
+
+        footerCopyright:
+            "स्मार्ट कृषी बाजार माहिती प्रणाली"
+
+    },
+
+
+    hi: {
+
+        location: "📍 कोपरगांव",
+
+        navDashboard: "डैशबोर्ड",
+        navMarket: "बाज़ार",
+        navForecast: "पूर्वानुमान",
+        navDecision: "स्मार्ट निर्णय",
+
+        heroLabel: "डेटा आधारित कृषि",
+
+        heroTitle:
+            "बेहतर बाजार निर्णय।",
+
+        heroTitleSecond:
+            "बेहतर कृषि आय।",
+
+        heroDescription:
+            "कोपरगांव के किसानों को अपनी फसल कब, कहाँ और कैसे बेचनी है, इसका निर्णय लेने में मदद करने वाली कृषि बाजार जानकारी।",
+
+        tagMarket:
+            "📊 बाजार जानकारी",
+
+        tagAI:
+            "🤖 AI मूल्य पूर्वानुमान",
+
+        tagLive:
+            "📡 बाजार डेटा",
+
+        selectCrop:
+            "अपनी फसल चुनें",
+
+        selectCropDescription:
+            "कोपरगांव की वर्तमान बाजार स्थिति का विश्लेषण करने के लिए फसल चुनें।",
+
+        cropLabel:
+            "फसल",
+
+        onion:
+            "🧅 प्याज़",
+
+        wheat:
+            "🌾 गेहूं",
+
+        analyzeMarket:
+            "बाज़ार का विश्लेषण करें",
+
+        analyzing:
+            "विश्लेषण हो रहा है...",
+
+        marketSnapshot:
+            "बाज़ार का अवलोकन",
+
+        marketSnapshotDescription:
+            "चयनित फसल की वर्तमान बाजार स्थिति।",
+
+        currentPriceLabel:
+            "वर्तमान भाव",
+
+        perQuintal:
+            "प्रति क्विंटल",
+
+        marketTrendLabel:
+            "बाजार का रुझान",
+
+        priceMovement:
+            "कीमत में बदलाव",
+
+        demandLabel:
+            "मांग",
+
+        marketIndicator:
+            "वर्तमान बाजार संकेतक",
+
+        forecastTitle:
+            "AI मूल्य पूर्वानुमान",
+
+        forecastDescription:
+            "हाल की बाजार जानकारी पर आधारित अनुमानित भविष्य की कीमत।",
+
+        expectedFuturePrice:
+            "अपेक्षित भविष्य की कीमत",
+
+        forecastInitialMessage:
+            "पूर्वानुमान प्राप्त करने के लिए फसल चुनें और बाजार का विश्लेषण करें।",
+
+        marketComparison:
+            "बाज़ार तुलना",
+
+        marketComparisonDescription:
+            "कोपरगांव बाजार की जानकारी।",
+
+        marketColumn:
+            "बाज़ार",
+
+        priceColumn:
+            "प्रति क्विंटल भाव",
+
+        statusColumn:
+            "स्थिति",
+
+        waiting:
+            "प्रतीक्षा",
+
+        live:
+            "लाइव",
+
+        fallback:
+            "वैकल्पिक",
+
+        smartSellingDecision:
+            "स्मार्ट बिक्री निर्णय",
+
+        smartSellingDescription:
+            "वर्तमान बाजार जानकारी के आधार पर बिक्री विकल्पों की तुलना करें।",
+
+        sellNow:
+            "अभी बेचें",
+
+        currentPriceDecision:
+            "वर्तमान भाव",
+
+        store:
+            "भंडारण",
+
+        estimatedFuturePrice:
+            "अनुमानित भविष्य का भाव",
+
+        transport:
+            "परिवहन",
+
+        estimatedPrice:
+            "अनुमानित भाव",
+
+        smartRecommendation:
+            "स्मार्ट सिफारिश",
+
+        recommendedAction:
+            "अनुशंसित कार्रवाई",
+
+        analyzeMarketFirst:
+            "बाज़ार का विश्लेषण करें",
+
+        recommendationInitialMessage:
+            "सिस्टम बाजार जानकारी का विश्लेषण करके सिफारिश देगा।",
+
+        liveDataConnection:
+            "बाजार डेटा कनेक्शन",
+
+        connectionReady:
+            "बाजार डेटा से जुड़ने के लिए तैयार।",
+
+        dataSourceDescription:
+            "बाजार की कीमतें SmartAgri बैकएंड द्वारा प्राप्त की जाती हैं।",
+
+        loadingMessage:
+            "SmartAgri बाजार सेवा से जुड़ा जा रहा है...",
+
+        successfulMessage:
+            "बाजार विश्लेषण सफलतापूर्वक पूरा हुआ।",
+
+        connectionError:
+            "SmartAgri बैकएंड से कनेक्ट नहीं हो सका।",
+
+        invalidResponse:
+            "बैकएंड से गलत प्रतिक्रिया मिली।",
+
+        footerFeatures:
+            "बाजार जानकारी • बहुभाषी • मोबाइल-अनुकूल",
+
+        footerCopyright:
+            "स्मार्ट कृषि बाजार सूचना प्रणाली"
+
+    }
+
+};
+
+
+/* =========================================================
+   GLOBAL STATE
+========================================================= */
+
+let currentLanguage =
+    localStorage.getItem("smartagri-language") || "en";
+
+let isAnalyzing = false;
+
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const languageSelect =
+    document.getElementById("languageSelect");
 
 const cropSelect =
     document.getElementById("crop");
 
 const analyzeButton =
     document.getElementById("analyzeButton");
+
+const analyzeButtonText =
+    document.getElementById("analyzeButtonText");
+
+const analysisStatus =
+    document.getElementById("analysisStatus");
 
 const currentPrice =
     document.getElementById("currentPrice");
@@ -25,9 +586,6 @@ const forecastPrice =
 const forecastMessage =
     document.getElementById("forecastMessage");
 
-const marketTable =
-    document.getElementById("marketTable");
-
 const sellReturn =
     document.getElementById("sellReturn");
 
@@ -41,566 +599,584 @@ const bestAction =
     document.getElementById("bestAction");
 
 const recommendationReason =
-    document.getElementById(
-        "recommendationReason"
-    );
+    document.getElementById("recommendationReason");
+
+const marketTable =
+    document.getElementById("marketTable");
 
 const connectionStatus =
-    document.getElementById(
-        "connectionStatus"
-    );
+    document.getElementById("connectionStatus");
 
-const languageSelect =
-    document.getElementById(
-        "languageSelect"
-    );
+const dataStatus =
+    document.getElementById("dataStatus");
 
+const dataDate =
+    document.getElementById("dataDate");
 
-// ============================================================
-// TRANSLATIONS
-// ============================================================
+const dataSource =
+    document.getElementById("dataSource");
 
-const translations = {
 
-    en: {
+/* =========================================================
+   TRANSLATION HELPERS
+========================================================= */
 
-        dashboard:
-            "Dashboard",
+function getTranslation(key) {
 
-        market:
-            "Market",
+    const dictionary =
+        translations[currentLanguage] ||
+        translations.en;
 
-        forecast:
-            "Forecast",
+    return dictionary[key] !== undefined
+        ? dictionary[key]
+        : translations.en[key] || key;
 
-        decision:
-            "Smart Decision",
+}
 
-        cropTitle:
-            "Select Your Crop",
 
-        cropDescription:
-            "Select a crop to analyze current market conditions in Kopargaon.",
+function applyLanguage(language) {
 
-        analyze:
-            "Analyze Market",
+    currentLanguage =
+        translations[language]
+            ? language
+            : "en";
 
-        snapshot:
-            "Market Snapshot",
+    document
+        .querySelectorAll("[data-i18n]")
+        .forEach((element) => {
 
-        snapshotDescription:
-            "Current market conditions for the selected crop.",
+            const key =
+                element.getAttribute("data-i18n");
 
-        currentPrice:
-            "Current Price",
+            const translated =
+                getTranslation(key);
 
-        marketTrend:
-            "Market Trend",
+            if (translated !== undefined) {
 
-        demand:
-            "Demand",
+                element.textContent =
+                    translated;
 
-        forecastTitle:
-            "AI Price Forecast",
+            }
 
-        forecastDescription:
-            "Estimated future price based on recent market information.",
+        });
 
-        comparison:
-            "Market Comparison",
 
-        decisionTitle:
-            "Smart Selling Decision",
-
-        sellNow:
-            "Sell Now",
-
-        store:
-            "Store",
-
-        transport:
-            "Transport",
-
-        recommendation:
-            "SMART RECOMMENDATION",
-
-        recommendedAction:
-            "Recommended Action",
-
-        connection:
-            "Live Data Connection"
-
-    },
-
-    mr: {
-
-        dashboard:
-            "डॅशबोर्ड",
-
-        market:
-            "बाजार",
-
-        forecast:
-            "अंदाज",
-
-        decision:
-            "स्मार्ट निर्णय",
-
-        cropTitle:
-            "तुमचे पीक निवडा",
-
-        cropDescription:
-            "कोपरगावमधील बाजारभाव पाहण्यासाठी पीक निवडा.",
-
-        analyze:
-            "बाजाराचे विश्लेषण करा",
-
-        snapshot:
-            "बाजार स्थिती",
-
-        snapshotDescription:
-            "निवडलेल्या पिकाची सध्याची बाजार स्थिती.",
-
-        currentPrice:
-            "सध्याचा भाव",
-
-        marketTrend:
-            "बाजार कल",
-
-        demand:
-            "मागणी",
-
-        forecastTitle:
-            "AI भाव अंदाज",
-
-        forecastDescription:
-            "अलीकडील बाजार माहितीवर आधारित भविष्यातील अंदाज.",
-
-        comparison:
-            "बाजार तुलना",
-
-        decisionTitle:
-            "स्मार्ट विक्री निर्णय",
-
-        sellNow:
-            "आता विक्री करा",
-
-        store:
-            "साठवून ठेवा",
-
-        transport:
-            "वाहतूक",
-
-        recommendation:
-            "स्मार्ट शिफारस",
-
-        recommendedAction:
-            "शिफारस केलेली कृती",
-
-        connection:
-            "थेट डेटा कनेक्शन"
-
-    },
-
-    hi: {
-
-        dashboard:
-            "डैशबोर्ड",
-
-        market:
-            "बाज़ार",
-
-        forecast:
-            "पूर्वानुमान",
-
-        decision:
-            "स्मार्ट निर्णय",
-
-        cropTitle:
-            "अपनी फसल चुनें",
-
-        cropDescription:
-            "कोपरगांव की बाजार स्थिति देखने के लिए फसल चुनें।",
-
-        analyze:
-            "बाज़ार का विश्लेषण करें",
-
-        snapshot:
-            "बाज़ार स्थिति",
-
-        snapshotDescription:
-            "चयनित फसल की वर्तमान बाजार स्थिति।",
-
-        currentPrice:
-            "वर्तमान भाव",
-
-        marketTrend:
-            "बाज़ार रुझान",
-
-        demand:
-            "मांग",
-
-        forecastTitle:
-            "AI मूल्य पूर्वानुमान",
-
-        forecastDescription:
-            "हाल की बाजार जानकारी के आधार पर भविष्य का अनुमान।",
-
-        comparison:
-            "बाज़ार तुलना",
-
-        decisionTitle:
-            "स्मार्ट बिक्री निर्णय",
-
-        sellNow:
-            "अभी बेचें",
-
-        store:
-            "भंडारण करें",
-
-        transport:
-            "परिवहन",
-
-        recommendation:
-            "स्मार्ट सुझाव",
-
-        recommendedAction:
-            "अनुशंसित कार्रवाई",
-
-        connection:
-            "लाइव डेटा कनेक्शन"
-
-    }
-};
-
-
-// ============================================================
-// LANGUAGE
-// ============================================================
-
-function changeLanguage(language) {
-
-    const t =
-        translations[language];
-
-    if (!t) {
-        return;
-    }
-
-
-    const navLinks =
-        document.querySelectorAll(
-            "nav a"
-        );
-
-    if (navLinks.length >= 4) {
-
-        navLinks[0].textContent =
-            t.dashboard;
-
-        navLinks[1].textContent =
-            t.market;
-
-        navLinks[2].textContent =
-            t.forecast;
-
-        navLinks[3].textContent =
-            t.decision;
-    }
-
-
-    const cropHeading =
-        document.querySelector(
-            "#crop-selection h2"
-        );
-
-    if (cropHeading) {
-        cropHeading.textContent =
-            t.cropTitle;
-    }
-
-
-    const cropDescription =
-        document.querySelector(
-            "#crop-selection .section-heading p"
-        );
-
-    if (cropDescription) {
-        cropDescription.textContent =
-            t.cropDescription;
-    }
-
-
-    analyzeButton.innerHTML =
-        `${t.analyze} <span>→</span>`;
-
-
-    const marketHeading =
-        document.querySelector(
-            "#market h2"
-        );
-
-    if (marketHeading) {
-        marketHeading.textContent =
-            t.snapshot;
-    }
-
-
-    const marketDescription =
-        document.querySelector(
-            "#market .section-heading p"
-        );
-
-    if (marketDescription) {
-        marketDescription.textContent =
-            t.snapshotDescription;
-    }
-
-
-    const cardTitles =
-        document.querySelectorAll(
-            "#market .card h3"
-        );
-
-    if (cardTitles.length >= 3) {
-
-        cardTitles[0].textContent =
-            t.currentPrice;
-
-        cardTitles[1].textContent =
-            t.marketTrend;
-
-        cardTitles[2].textContent =
-            t.demand;
-    }
-
-
-    const forecastHeading =
-        document.querySelector(
-            "#forecast h2"
-        );
-
-    if (forecastHeading) {
-        forecastHeading.textContent =
-            t.forecastTitle;
-    }
-
-
-    const forecastDescription =
-        document.querySelector(
-            "#forecast .section-heading p"
-        );
-
-    if (forecastDescription) {
-        forecastDescription.textContent =
-            t.forecastDescription;
-    }
-
-
-    const comparisonHeading =
-        document.querySelector(
-            "#market-comparison h2"
-        );
-
-    if (comparisonHeading) {
-        comparisonHeading.textContent =
-            t.comparison;
-    }
-
-
-    const decisionHeading =
-        document.querySelector(
-            "#decision h2"
-        );
-
-    if (decisionHeading) {
-        decisionHeading.textContent =
-            t.decisionTitle;
-    }
-
-
-    const decisionCards =
-        document.querySelectorAll(
-            ".decision-card h3"
-        );
-
-    if (decisionCards.length >= 3) {
-
-        decisionCards[0].textContent =
-            t.sellNow;
-
-        decisionCards[1].textContent =
-            t.store;
-
-        decisionCards[2].textContent =
-            t.transport;
-    }
-
-
-    const recommendationLabel =
-        document.querySelector(
-            ".recommendation-label"
-        );
-
-    if (recommendationLabel) {
-
-        recommendationLabel.textContent =
-            t.recommendation;
-    }
-
-
-    const recommendationTitle =
-        document.querySelector(
-            "#recommendation h2"
-        );
-
-    if (recommendationTitle) {
-
-        recommendationTitle.textContent =
-            t.recommendedAction;
-    }
-
-
-    const connectionHeading =
-        document.querySelector(
-            "#offline-status h2"
-        );
-
-    if (connectionHeading) {
-
-        connectionHeading.textContent =
-            t.connection;
-    }
+    document.documentElement.lang =
+        currentLanguage;
 
 
     localStorage.setItem(
         "smartagri-language",
-        language
-    );
-}
-
-
-// ============================================================
-// LOAD SAVED LANGUAGE
-// ============================================================
-
-const savedLanguage =
-    localStorage.getItem(
-        "smartagri-language"
+        currentLanguage
     );
 
-if (savedLanguage) {
 
-    languageSelect.value =
-        savedLanguage;
+    if (!isAnalyzing) {
 
-    changeLanguage(
-        savedLanguage
-    );
-}
-
-
-// ============================================================
-// LANGUAGE EVENT
-// ============================================================
-
-languageSelect.addEventListener(
-    "change",
-    function () {
-
-        changeLanguage(
-            this.value
-        );
+        analyzeButtonText.textContent =
+            getTranslation("analyzeMarket");
 
     }
+
+}
+
+
+/* =========================================================
+   LANGUAGE SELECTOR
+========================================================= */
+
+if (languageSelect) {
+
+    languageSelect.value =
+        translations[currentLanguage]
+            ? currentLanguage
+            : "en";
+
+    languageSelect.addEventListener(
+        "change",
+        function () {
+
+            applyLanguage(
+                this.value
+            );
+
+        }
+    );
+
+}
+
+
+applyLanguage(
+    currentLanguage
 );
 
 
-// ============================================================
-// FORMAT MONEY
-// ============================================================
+/* =========================================================
+   FORMAT PRICE
+========================================================= */
 
-function formatMoney(value) {
+function formatPrice(value) {
 
     if (
         value === null ||
         value === undefined ||
-        value === ""
+        value === "" ||
+        Number.isNaN(Number(value))
     ) {
 
         return "--";
+
     }
 
     return (
         "₹" +
         Number(value).toLocaleString(
-            "en-IN"
+            "en-IN",
+            {
+                maximumFractionDigits: 0
+            }
         )
     );
+
 }
 
 
-// ============================================================
-// FORMAT DATE
-// ============================================================
+/* =========================================================
+   TRANSLATE API VALUES
+========================================================= */
 
-function formatDate(dateValue) {
+function translateTrend(value) {
 
-    if (!dateValue) {
-        return "--";
+    if (currentLanguage === "mr") {
+
+        if (value === "Increasing")
+            return "वाढत आहे";
+
+        if (value === "Decreasing")
+            return "घटत आहे";
+
+        return "स्थिर";
+
     }
 
-    const date =
-        new Date(
-            dateValue + "T00:00:00"
+
+    if (currentLanguage === "hi") {
+
+        if (value === "Increasing")
+            return "बढ़ रहा है";
+
+        if (value === "Decreasing")
+            return "गिर रहा है";
+
+        return "स्थिर";
+
+    }
+
+
+    return value || "--";
+
+}
+
+
+function translateDemand(value) {
+
+    if (currentLanguage === "mr") {
+
+        if (value === "High")
+            return "जास्त";
+
+        if (value === "Moderate")
+            return "मध्यम";
+
+        return "स्थिर";
+
+    }
+
+
+    if (currentLanguage === "hi") {
+
+        if (value === "High")
+            return "उच्च";
+
+        if (value === "Moderate")
+            return "मध्यम";
+
+        return "स्थिर";
+
+    }
+
+
+    return value || "--";
+
+}
+
+
+function translateAction(value) {
+
+    if (currentLanguage === "mr") {
+
+        if (value === "Sell Now")
+            return "आता विक्री करा";
+
+        if (value === "Store")
+            return "साठवणूक";
+
+    }
+
+
+    if (currentLanguage === "hi") {
+
+        if (value === "Sell Now")
+            return "अभी बेचें";
+
+        if (value === "Store")
+            return "भंडारण";
+
+    }
+
+
+    return value || "--";
+
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+function setStatus(
+    message,
+    type = ""
+) {
+
+    analysisStatus.textContent =
+        message;
+
+    analysisStatus.className =
+        "analysis-status " +
+        type;
+
+}
+
+
+/* =========================================================
+   BUTTON STATE
+========================================================= */
+
+function setAnalyzingState(active) {
+
+    isAnalyzing =
+        active;
+
+
+    analyzeButton.disabled =
+        active;
+
+
+    if (active) {
+
+        analyzeButtonText.textContent =
+            getTranslation("analyzing");
+
+    } else {
+
+        analyzeButtonText.textContent =
+            getTranslation("analyzeMarket");
+
+    }
+
+}
+
+
+/* =========================================================
+   UPDATE CONNECTION
+========================================================= */
+
+function updateConnection(
+    message,
+    success = false
+) {
+
+    connectionStatus.textContent =
+        message;
+
+    connectionStatus.style.color =
+        success
+            ? "var(--leaf-green)"
+            : "var(--charcoal-light)";
+
+}
+
+
+/* =========================================================
+   UPDATE TABLE
+========================================================= */
+
+function updateMarketTable(data) {
+
+    const marketName =
+        data.market ||
+        "Kopargaon APMC";
+
+    const status =
+        data.data_status === "live"
+            ? getTranslation("live")
+            : getTranslation("fallback");
+
+    const statusClass =
+        data.data_status === "live"
+            ? "live"
+            : "fallback";
+
+
+    marketTable.innerHTML = `
+
+        <tr>
+
+            <td>
+                📍 ${escapeHtml(marketName)}
+            </td>
+
+            <td>
+                <strong>
+                    ${formatPrice(data.current_price)}
+                </strong>
+            </td>
+
+            <td>
+
+                <span class="status-pill ${statusClass}">
+                    ${escapeHtml(status)}
+                </span>
+
+            </td>
+
+        </tr>
+
+    `;
+
+}
+
+
+/* =========================================================
+   UPDATE UI
+========================================================= */
+
+function updateDashboard(data) {
+
+    currentPrice.textContent =
+        formatPrice(
+            data.current_price
         );
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
 
-        return dateValue;
-    }
+    marketTrend.textContent =
+        translateTrend(
+            data.trend
+        );
 
-    return date.toLocaleDateString(
-        "en-IN",
-        {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        }
+
+    demand.textContent =
+        translateDemand(
+            data.demand
+        );
+
+
+    forecastPrice.textContent =
+        formatPrice(
+            data.forecast_price
+        );
+
+
+    forecastMessage.textContent =
+        data.forecast_message ||
+        "--";
+
+
+    sellReturn.textContent =
+        formatPrice(
+            data.sell_now
+        );
+
+
+    storeReturn.textContent =
+        formatPrice(
+            data.store
+        );
+
+
+    transportReturn.textContent =
+        formatPrice(
+            data.transport
+        );
+
+
+    bestAction.textContent =
+        translateAction(
+            data.best_action ||
+            data.recommendation
+        );
+
+
+    recommendationReason.textContent =
+        data.recommendation_reason ||
+        "--";
+
+
+    dataStatus.textContent =
+        "Data status: " +
+        (
+            data.data_status ||
+            "--"
+        );
+
+
+    dataDate.textContent =
+        "Date: " +
+        (
+            data.latest_date ||
+            data.data_date ||
+            "--"
+        );
+
+
+    dataSource.textContent =
+        "Source: " +
+        (
+            data.source ||
+            "--"
+        );
+
+
+    updateMarketTable(
+        data
     );
+
+
+    updateConnection(
+        data.message ||
+        getTranslation("successfulMessage"),
+        true
+    );
+
 }
 
 
-// ============================================================
-// ANALYZE MARKET
-// ============================================================
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+}
+
+
+/* =========================================================
+   API REQUEST
+========================================================= */
 
 async function analyzeMarket() {
+
+    if (isAnalyzing) {
+
+        return;
+
+    }
+
 
     const crop =
         cropSelect.value;
 
-    analyzeButton.disabled =
-        true;
 
-    analyzeButton.innerHTML =
-        "Analyzing...";
+    if (!crop) {
+
+        setStatus(
+            "Please select a crop.",
+            "error"
+        );
+
+        return;
+
+    }
 
 
-    connectionStatus.textContent =
-        "Connecting to SmartAgri market service...";
+    setAnalyzingState(
+        true
+    );
+
+
+    setStatus(
+        getTranslation(
+            "loadingMessage"
+        ),
+        "loading"
+    );
+
+
+    updateConnection(
+        getTranslation(
+            "loadingMessage"
+        ),
+        false
+    );
 
 
     try {
 
+        /*
+         * IMPORTANT:
+         *
+         * We intentionally use a relative URL.
+         *
+         * This means:
+         *
+         * https://your-render-site.onrender.com
+         *
+         * automatically calls:
+         *
+         * https://your-render-site.onrender.com/api/market
+         *
+         * No localhost.
+         * No hardcoded Render URL.
+         * No separate frontend/backend URL.
+         */
+
+        const url =
+            `/api/market?crop=${encodeURIComponent(crop)}`;
+
+
+        console.log(
+            "SmartAgri API request:",
+            url
+        );
+
+
         const response =
             await fetch(
-                `/api/market?crop=${encodeURIComponent(crop)}`
+                url,
+                {
+                    method: "GET",
+                    headers: {
+                        "Accept":
+                            "application/json"
+                    },
+                    cache:
+                        "no-store"
+                }
             );
+
+
+        console.log(
+            "SmartAgri API status:",
+            response.status
+        );
 
 
         if (!response.ok) {
@@ -608,6 +1184,7 @@ async function analyzeMarket() {
             throw new Error(
                 `HTTP ${response.status}`
             );
+
         }
 
 
@@ -615,12 +1192,24 @@ async function analyzeMarket() {
             await response.json();
 
 
-        if (!data.success) {
+        console.log(
+            "SmartAgri API response:",
+            data
+        );
+
+
+        if (
+            !data ||
+            data.success !== true
+        ) {
 
             throw new Error(
-                data.error ||
-                "Market request failed"
+                data?.error ||
+                getTranslation(
+                    "invalidResponse"
+                )
             );
+
         }
 
 
@@ -629,202 +1218,193 @@ async function analyzeMarket() {
         );
 
 
-        connectionStatus.textContent =
-            `Latest data: ${formatDate(
-                data.latest_date
-            )} • ${data.source}`;
+        setStatus(
+            getTranslation(
+                "successfulMessage"
+            ),
+            "success"
+        );
+
+
+        /*
+         * Move the user to the results.
+         */
+
+        document
+            .getElementById("market")
+            .scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
 
 
     } catch (error) {
 
         console.error(
-            "SmartAgri error:",
+            "SmartAgri analysis error:",
             error
         );
 
 
-        connectionStatus.textContent =
-            "Unable to refresh market data. Showing the latest recorded value.";
+        setStatus(
+            `${getTranslation("connectionError")} ${error.message}`,
+            "error"
+        );
+
+
+        updateConnection(
+            `${getTranslation("connectionError")} ${error.message}`,
+            false
+        );
+
+
+        /*
+         * Do not erase previous values if a request
+         * fails after the user already has data.
+         */
+
+    } finally {
+
+        setAnalyzingState(
+            false
+        );
+
     }
 
-
-    analyzeButton.disabled =
-        false;
-
-
-    analyzeButton.innerHTML =
-        "Analyze Market <span>→</span>";
 }
 
 
-// ============================================================
-// UPDATE DASHBOARD
-// ============================================================
+/* =========================================================
+   ANALYZE BUTTON
+========================================================= */
 
-function updateDashboard(data) {
+if (analyzeButton) {
 
-    currentPrice.textContent =
-        formatMoney(
-            data.current_price
-        );
+    analyzeButton.addEventListener(
+        "click",
+        function (event) {
 
+            event.preventDefault();
 
-    marketTrend.textContent =
-        `${data.trend} ${
-            data.change_percent > 0
-                ? "+" + data.change_percent + "%"
-                : data.change_percent + "%"
-        }`;
+            console.log(
+                "Analyze Market button clicked"
+            );
 
+            analyzeMarket();
 
-    demand.textContent =
-        data.demand;
+        }
+    );
 
-
-    forecastPrice.textContent =
-        formatMoney(
-            data.forecast_price
-        );
-
-
-    forecastMessage.textContent =
-        data.forecast_message;
-
-
-    sellReturn.textContent =
-        formatMoney(
-            data.sell_now
-        );
-
-
-    storeReturn.textContent =
-        formatMoney(
-            data.store
-        );
-
-
-    transportReturn.textContent =
-        formatMoney(
-            data.transport
-        );
-
-
-    bestAction.textContent =
-        data.best_action;
-
-
-    recommendationReason.textContent =
-        data.recommendation_reason;
-
-
-    // --------------------------------------------------------
-    // Market table
-    // --------------------------------------------------------
-
-    marketTable.innerHTML = `
-
-        <tr>
-
-            <td>
-                📍 ${data.market}
-            </td>
-
-            <td>
-                ${formatMoney(
-                    data.current_price
-                )}
-            </td>
-
-            <td>
-                ${data.trend}
-            </td>
-
-        </tr>
-
-        <tr>
-
-            <td>
-                Latest Data Date
-            </td>
-
-            <td colspan="2">
-
-                ${formatDate(
-                    data.latest_date
-                )}
-
-            </td>
-
-        </tr>
-
-        <tr>
-
-            <td>
-                Source
-            </td>
-
-            <td colspan="2">
-
-                ${data.source}
-
-            </td>
-
-        </tr>
-
-    `;
-
-
-    // --------------------------------------------------------
-    // Status
-    // --------------------------------------------------------
-
-    if (
-        data.data_status === "live"
-    ) {
-
-        connectionStatus.textContent =
-            `Live market data • ${formatDate(
-                data.latest_date
-            )}`;
-
-    } else if (
-        data.data_status === "baseline"
-    ) {
-
-        connectionStatus.textContent =
-            `SmartAgri baseline • ${formatDate(
-                data.latest_date
-            )}`;
-
-    } else {
-
-        connectionStatus.textContent =
-            `Latest recorded price • ${formatDate(
-                data.latest_date
-            )}`;
-    }
 }
 
 
-// ============================================================
-// BUTTON
-// ============================================================
+/* =========================================================
+   ENTER / KEYBOARD SUPPORT
+========================================================= */
 
-analyzeButton.addEventListener(
-    "click",
-    analyzeMarket
-);
+if (cropSelect) {
+
+    cropSelect.addEventListener(
+        "keydown",
+        function (event) {
+
+            if (
+                event.key === "Enter"
+            ) {
+
+                event.preventDefault();
+
+                analyzeMarket();
+
+            }
+
+        }
+    );
+
+}
 
 
-// ============================================================
-// AUTOMATIC INITIAL LOAD
-// ============================================================
+/* =========================================================
+   OPTIONAL INITIAL BACKEND CHECK
+========================================================= */
 
-window.addEventListener(
+async function checkBackend() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/health",
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+
+        if (response.ok) {
+
+            updateConnection(
+                getTranslation(
+                    "connectionReady"
+                ),
+                true
+            );
+
+            console.log(
+                "SmartAgri backend is reachable."
+            );
+
+        } else {
+
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+
+        }
+
+    } catch (error) {
+
+        console.warn(
+            "Backend health check failed:",
+            error
+        );
+
+        updateConnection(
+            getTranslation(
+                "connectionError"
+            ),
+            false
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+document.addEventListener(
     "DOMContentLoaded",
     function () {
 
-        analyzeMarket();
+        console.log(
+            "SmartAgri frontend initialized."
+        );
+
+        console.log(
+            "Current crop:",
+            cropSelect?.value
+        );
+
+        console.log(
+            "Current language:",
+            currentLanguage
+        );
+
+        checkBackend();
 
     }
 );
