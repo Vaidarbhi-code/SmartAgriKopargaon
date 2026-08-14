@@ -4,10 +4,7 @@
 <head>
     <meta charset="UTF-8">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>SmartAgri Kopargaon</title>
 
@@ -24,10 +21,7 @@
 
             <div class="logo-icon">
 
-                <svg
-                    viewBox="0 0 70 70"
-                    aria-label="SmartAgri logo"
-                >
+                <svg viewBox="0 0 70 70" aria-label="SmartAgri logo">
 
                     <path
                         d="M18 58 C20 45, 23 30, 30 14"
@@ -82,40 +76,11 @@
                         stroke-linejoin="round"
                     />
 
-                    <circle
-                        cx="17"
-                        cy="53"
-                        r="3"
-                        fill="#F6C445"
-                    />
-
-                    <circle
-                        cx="29"
-                        cy="45"
-                        r="3"
-                        fill="#F6C445"
-                    />
-
-                    <circle
-                        cx="40"
-                        cy="38"
-                        r="3"
-                        fill="#F6C445"
-                    />
-
-                    <circle
-                        cx="51"
-                        cy="27"
-                        r="3"
-                        fill="#F6C445"
-                    />
-
-                    <circle
-                        cx="62"
-                        cy="15"
-                        r="3"
-                        fill="#F6C445"
-                    />
+                    <circle cx="17" cy="53" r="3" fill="#F6C445" />
+                    <circle cx="29" cy="45" r="3" fill="#F6C445" />
+                    <circle cx="40" cy="38" r="3" fill="#F6C445" />
+                    <circle cx="51" cy="27" r="3" fill="#F6C445" />
+                    <circle cx="62" cy="15" r="3" fill="#F6C445" />
 
                 </svg>
 
@@ -126,14 +91,14 @@
         </div>
 
 
-        <div class="location">
+        <div class="location" data-i18n="location">
             📍 Kopargaon
         </div>
 
 
         <div class="language">
 
-            <select id="languageSelect">
+            <select id="languageSelect" aria-label="Language">
 
                 <option value="en">
                     English
@@ -158,19 +123,19 @@
 
     <nav>
 
-        <a href="#dashboard">
+        <a href="#dashboard" data-i18n="navDashboard">
             Dashboard
         </a>
 
-        <a href="#market">
+        <a href="#market" data-i18n="navMarket">
             Market
         </a>
 
-        <a href="#forecast">
+        <a href="#forecast" data-i18n="navForecast">
             Forecast
         </a>
 
-        <a href="#decision">
+        <a href="#decision" data-i18n="navDecision">
             Smart Decision
         </a>
 
@@ -188,16 +153,21 @@
 
             <div class="hero-content">
 
-                <span class="hero-label">
+                <span class="hero-label" data-i18n="heroLabel">
                     DATA-DRIVEN AGRICULTURE
                 </span>
 
                 <h1>
-                    Smarter Market Decisions.
-                    <span>Better Farm Returns.</span>
+                    <span data-i18n="heroTitle">
+                        Smarter Market Decisions.
+                    </span>
+
+                    <span data-i18n="heroTitleSecond">
+                        Better Farm Returns.
+                    </span>
                 </h1>
 
-                <p>
+                <p data-i18n="heroDescription">
                     Agricultural market intelligence designed
                     to help farmers in Kopargaon decide
                     when, where and how to sell their produce.
@@ -205,15 +175,15 @@
 
                 <div class="hero-tags">
 
-                    <span>
+                    <span data-i18n="tagMarket">
                         📊 Market Intelligence
                     </span>
 
-                    <span>
+                    <span data-i18n="tagAI">
                         🤖 AI Forecasting
                     </span>
 
-                    <span>
+                    <span data-i18n="tagLive">
                         📡 Live Data
                     </span>
 
@@ -236,11 +206,11 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="selectCrop">
                         Select Your Crop
                     </h2>
 
-                    <p>
+                    <p data-i18n="selectCropDescription">
                         Select a crop to analyze current
                         live market conditions in Kopargaon.
                     </p>
@@ -253,21 +223,19 @@
             <div class="input-grid">
 
 
-                <!-- CROP -->
-
                 <div class="input-group">
 
-                    <label for="crop">
+                    <label for="crop" data-i18n="cropLabel">
                         Crop
                     </label>
 
                     <select id="crop">
 
-                        <option value="onion">
+                        <option value="onion" data-i18n="onion">
                             🧅 Onion
                         </option>
 
-                        <option value="wheat">
+                        <option value="wheat" data-i18n="wheat">
                             🌾 Wheat
                         </option>
 
@@ -276,8 +244,6 @@
                 </div>
 
 
-                <!-- ANALYZE BUTTON -->
-
                 <div class="analyze-wrapper">
 
                     <button
@@ -285,7 +251,9 @@
                         type="button"
                     >
 
-                        Analyze Market
+                        <span data-i18n="analyzeMarket">
+                            Analyze Market
+                        </span>
 
                         <span>
                             →
@@ -312,11 +280,11 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="marketSnapshot">
                         Market Snapshot
                     </h2>
 
-                    <p>
+                    <p data-i18n="marketSnapshotDescription">
                         Current live market conditions
                         for the selected crop.
                     </p>
@@ -339,7 +307,7 @@
 
                     <div>
 
-                        <h3>
+                        <h3 data-i18n="currentPriceLabel">
                             Current Price
                         </h3>
 
@@ -347,7 +315,10 @@
                             --
                         </p>
 
-                        <span class="card-description">
+                        <span
+                            class="card-description"
+                            data-i18n="perQuintal"
+                        >
                             Per Quintal
                         </span>
 
@@ -366,7 +337,7 @@
 
                     <div>
 
-                        <h3>
+                        <h3 data-i18n="marketTrendLabel">
                             Market Trend
                         </h3>
 
@@ -374,7 +345,10 @@
                             --
                         </p>
 
-                        <span class="card-description">
+                        <span
+                            class="card-description"
+                            data-i18n="priceMovement"
+                        >
                             Price movement
                         </span>
 
@@ -393,7 +367,7 @@
 
                     <div>
 
-                        <h3>
+                        <h3 data-i18n="demandLabel">
                             Demand
                         </h3>
 
@@ -401,7 +375,10 @@
                             --
                         </p>
 
-                        <span class="card-description">
+                        <span
+                            class="card-description"
+                            data-i18n="marketIndicator"
+                        >
                             Current market indicator
                         </span>
 
@@ -426,11 +403,11 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="forecastTitle">
                         AI Price Forecast
                     </h2>
 
-                    <p>
+                    <p data-i18n="forecastDescription">
                         Estimated future price based on
                         current market information.
                     </p>
@@ -444,7 +421,10 @@
 
                 <div>
 
-                    <span class="forecast-label">
+                    <span
+                        class="forecast-label"
+                        data-i18n="expectedFuturePrice"
+                    >
                         EXPECTED FUTURE PRICE
                     </span>
 
@@ -452,7 +432,10 @@
                         --
                     </h3>
 
-                    <p id="forecastMessage">
+                    <p
+                        id="forecastMessage"
+                        data-i18n="forecastInitialMessage"
+                    >
                         Select a crop and analyze the market
                         to generate a forecast.
                     </p>
@@ -481,11 +464,11 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="marketComparison">
                         Market Comparison
                     </h2>
 
-                    <p>
+                    <p data-i18n="marketComparisonDescription">
                         Live Kopargaon market information.
                     </p>
 
@@ -502,15 +485,15 @@
 
                         <tr>
 
-                            <th>
+                            <th data-i18n="marketColumn">
                                 Market
                             </th>
 
-                            <th>
+                            <th data-i18n="priceColumn">
                                 Price / Quintal
                             </th>
 
-                            <th>
+                            <th data-i18n="statusColumn">
                                 Status
                             </th>
 
@@ -523,7 +506,7 @@
 
                         <tr>
 
-                            <td>
+                            <td data-i18n="kopargaonAPMC">
                                 📍 Kopargaon APMC
                             </td>
 
@@ -531,7 +514,7 @@
                                 --
                             </td>
 
-                            <td>
+                            <td data-i18n="waiting">
                                 Waiting
                             </td>
 
@@ -558,11 +541,11 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="smartSellingDecision">
                         Smart Selling Decision
                     </h2>
 
-                    <p>
+                    <p data-i18n="smartSellingDescription">
                         Compare possible selling strategies
                         using current market information.
                     </p>
@@ -583,11 +566,11 @@
                         💰
                     </div>
 
-                    <h3>
+                    <h3 data-i18n="sellNow">
                         Sell Now
                     </h3>
 
-                    <p>
+                    <p data-i18n="currentPriceDecision">
                         Current Price
                     </p>
 
@@ -606,11 +589,11 @@
                         📦
                     </div>
 
-                    <h3>
+                    <h3 data-i18n="store">
                         Store
                     </h3>
 
-                    <p>
+                    <p data-i18n="estimatedFuturePrice">
                         Estimated Future Price
                     </p>
 
@@ -629,11 +612,11 @@
                         🚚
                     </div>
 
-                    <h3>
+                    <h3 data-i18n="transport">
                         Transport
                     </h3>
 
-                    <p>
+                    <p data-i18n="estimatedPrice">
                         Estimated Price
                     </p>
 
@@ -656,19 +639,28 @@
 
                 <div>
 
-                    <span class="recommendation-label">
+                    <span
+                        class="recommendation-label"
+                        data-i18n="smartRecommendation"
+                    >
                         SMART RECOMMENDATION
                     </span>
 
-                    <h2>
+                    <h2 data-i18n="recommendedAction">
                         Recommended Action
                     </h2>
 
-                    <h3 id="bestAction">
+                    <h3
+                        id="bestAction"
+                        data-i18n="analyzeMarketFirst"
+                    >
                         Analyze the market
                     </h3>
 
-                    <p id="recommendationReason">
+                    <p
+                        id="recommendationReason"
+                        data-i18n="recommendationInitialMessage"
+                    >
                         The system will analyze live market
                         data and provide a recommendation.
                     </p>
@@ -692,15 +684,18 @@
 
                 <div>
 
-                    <h2>
+                    <h2 data-i18n="liveDataConnection">
                         Live Data Connection
                     </h2>
 
-                    <p id="connectionStatus">
+                    <p
+                        id="connectionStatus"
+                        data-i18n="connectionReady"
+                    >
                         Ready to connect to live market data.
                     </p>
 
-                    <span>
+                    <span data-i18n="dataSourceDescription">
                         Market prices are retrieved through
                         the SmartAgri backend from
                         data.gov.in / Agmarknet.
@@ -723,26 +718,632 @@
             🌾 SmartAgri Kopargaon
         </div>
 
-        <p>
+        <p data-i18n="footerFeatures">
             Live Market Data • Multilingual • Mobile-friendly
         </p>
 
-        <p class="copyright">
+        <p
+            class="copyright"
+            data-i18n="footerCopyright"
+        >
             Smart Agriculture Market Intelligence System
         </p>
 
     </footer>
 
 
-    <!-- ================= JAVASCRIPT ================= -->
+    <!-- ================= TRANSLATION SYSTEM ================= -->
 
-    <!--
-        IMPORTANT:
-        Only script.js is loaded here.
+    <script>
 
-        server.js runs separately in Command Prompt.
-    -->
+        const translations = {
 
+            en: {
+
+                location:
+                    "📍 Kopargaon",
+
+                navDashboard:
+                    "Dashboard",
+
+                navMarket:
+                    "Market",
+
+                navForecast:
+                    "Forecast",
+
+                navDecision:
+                    "Smart Decision",
+
+                heroLabel:
+                    "DATA-DRIVEN AGRICULTURE",
+
+                heroTitle:
+                    "Smarter Market Decisions.",
+
+                heroTitleSecond:
+                    "Better Farm Returns.",
+
+                heroDescription:
+                    "Agricultural market intelligence designed to help farmers in Kopargaon decide when, where and how to sell their produce.",
+
+                tagMarket:
+                    "📊 Market Intelligence",
+
+                tagAI:
+                    "🤖 AI Forecasting",
+
+                tagLive:
+                    "📡 Live Data",
+
+                selectCrop:
+                    "Select Your Crop",
+
+                selectCropDescription:
+                    "Select a crop to analyze current live market conditions in Kopargaon.",
+
+                cropLabel:
+                    "Crop",
+
+                onion:
+                    "🧅 Onion",
+
+                wheat:
+                    "🌾 Wheat",
+
+                analyzeMarket:
+                    "Analyze Market",
+
+                marketSnapshot:
+                    "Market Snapshot",
+
+                marketSnapshotDescription:
+                    "Current live market conditions for the selected crop.",
+
+                currentPriceLabel:
+                    "Current Price",
+
+                perQuintal:
+                    "Per Quintal",
+
+                marketTrendLabel:
+                    "Market Trend",
+
+                priceMovement:
+                    "Price movement",
+
+                demandLabel:
+                    "Demand",
+
+                marketIndicator:
+                    "Current market indicator",
+
+                forecastTitle:
+                    "AI Price Forecast",
+
+                forecastDescription:
+                    "Estimated future price based on current market information.",
+
+                expectedFuturePrice:
+                    "EXPECTED FUTURE PRICE",
+
+                forecastInitialMessage:
+                    "Select a crop and analyze the market to generate a forecast.",
+
+                marketComparison:
+                    "Market Comparison",
+
+                marketComparisonDescription:
+                    "Live Kopargaon market information.",
+
+                marketColumn:
+                    "Market",
+
+                priceColumn:
+                    "Price / Quintal",
+
+                statusColumn:
+                    "Status",
+
+                kopargaonAPMC:
+                    "📍 Kopargaon APMC",
+
+                waiting:
+                    "Waiting",
+
+                smartSellingDecision:
+                    "Smart Selling Decision",
+
+                smartSellingDescription:
+                    "Compare possible selling strategies using current market information.",
+
+                sellNow:
+                    "Sell Now",
+
+                currentPriceDecision:
+                    "Current Price",
+
+                store:
+                    "Store",
+
+                estimatedFuturePrice:
+                    "Estimated Future Price",
+
+                transport:
+                    "Transport",
+
+                estimatedPrice:
+                    "Estimated Price",
+
+                smartRecommendation:
+                    "SMART RECOMMENDATION",
+
+                recommendedAction:
+                    "Recommended Action",
+
+                analyzeMarketFirst:
+                    "Analyze the market",
+
+                recommendationInitialMessage:
+                    "The system will analyze live market data and provide a recommendation.",
+
+                liveDataConnection:
+                    "Live Data Connection",
+
+                connectionReady:
+                    "Ready to connect to live market data.",
+
+                dataSourceDescription:
+                    "Market prices are retrieved through the SmartAgri backend from data.gov.in / Agmarknet.",
+
+                footerFeatures:
+                    "Live Market Data • Multilingual • Mobile-friendly",
+
+                footerCopyright:
+                    "Smart Agriculture Market Intelligence System"
+            },
+
+
+            mr: {
+
+                location:
+                    "📍 कोपरगाव",
+
+                navDashboard:
+                    "डॅशबोर्ड",
+
+                navMarket:
+                    "बाजार",
+
+                navForecast:
+                    "अंदाज",
+
+                navDecision:
+                    "स्मार्ट निर्णय",
+
+                heroLabel:
+                    "डेटावर आधारित शेती",
+
+                heroTitle:
+                    "अधिक स्मार्ट बाजार निर्णय.",
+
+                heroTitleSecond:
+                    "शेतीतून अधिक उत्पन्न.",
+
+                heroDescription:
+                    "कोपरगावमधील शेतकऱ्यांना त्यांच्या मालाची विक्री केव्हा, कुठे आणि कशी करावी याचा निर्णय घेण्यासाठी कृषी बाजार माहिती.",
+
+                tagMarket:
+                    "📊 बाजार माहिती",
+
+                tagAI:
+                    "🤖 AI किंमत अंदाज",
+
+                tagLive:
+                    "📡 थेट माहिती",
+
+                selectCrop:
+                    "तुमचे पीक निवडा",
+
+                selectCropDescription:
+                    "कोपरगावमधील सध्याच्या बाजार परिस्थितीचे विश्लेषण करण्यासाठी पीक निवडा.",
+
+                cropLabel:
+                    "पीक",
+
+                onion:
+                    "🧅 कांदा",
+
+                wheat:
+                    "🌾 गहू",
+
+                analyzeMarket:
+                    "बाजाराचे विश्लेषण करा",
+
+                marketSnapshot:
+                    "बाजाराचा आढावा",
+
+                marketSnapshotDescription:
+                    "निवडलेल्या पिकासाठी सध्याची बाजार परिस्थिती.",
+
+                currentPriceLabel:
+                    "सध्याचा भाव",
+
+                perQuintal:
+                    "प्रति क्विंटल",
+
+                marketTrendLabel:
+                    "बाजारातील कल",
+
+                priceMovement:
+                    "किंमतीतील बदल",
+
+                demandLabel:
+                    "मागणी",
+
+                marketIndicator:
+                    "सध्याचा बाजार निर्देशांक",
+
+                forecastTitle:
+                    "AI किंमत अंदाज",
+
+                forecastDescription:
+                    "सध्याच्या बाजार माहितीवर आधारित अंदाजे भविष्यातील किंमत.",
+
+                expectedFuturePrice:
+                    "अपेक्षित भविष्यातील किंमत",
+
+                forecastInitialMessage:
+                    "अंदाज मिळवण्यासाठी पीक निवडा आणि बाजाराचे विश्लेषण करा.",
+
+                marketComparison:
+                    "बाजार तुलना",
+
+                marketComparisonDescription:
+                    "कोपरगाव बाजाराची थेट माहिती.",
+
+                marketColumn:
+                    "बाजार",
+
+                priceColumn:
+                    "किंमत / क्विंटल",
+
+                statusColumn:
+                    "स्थिती",
+
+                kopargaonAPMC:
+                    "📍 कोपरगाव APMC",
+
+                waiting:
+                    "प्रतीक्षा",
+
+                smartSellingDecision:
+                    "स्मार्ट विक्री निर्णय",
+
+                smartSellingDescription:
+                    "सध्याच्या बाजार माहितीच्या आधारे विक्रीच्या पर्यायांची तुलना करा.",
+
+                sellNow:
+                    "आता विक्री करा",
+
+                currentPriceDecision:
+                    "सध्याचा भाव",
+
+                store:
+                    "साठवणूक करा",
+
+                estimatedFuturePrice:
+                    "अंदाजे भविष्यातील किंमत",
+
+                transport:
+                    "वाहतूक",
+
+                estimatedPrice:
+                    "अंदाजे किंमत",
+
+                smartRecommendation:
+                    "स्मार्ट शिफारस",
+
+                recommendedAction:
+                    "शिफारस केलेली कृती",
+
+                analyzeMarketFirst:
+                    "बाजाराचे विश्लेषण करा",
+
+                recommendationInitialMessage:
+                    "प्रणाली बाजारातील माहितीचे विश्लेषण करून शिफारस देईल.",
+
+                liveDataConnection:
+                    "थेट माहिती कनेक्शन",
+
+                connectionReady:
+                    "थेट बाजार माहितीशी जोडण्यासाठी तयार.",
+
+                dataSourceDescription:
+                    "बाजारातील किंमती SmartAgri बॅकएंडद्वारे data.gov.in / Agmarknet मधून मिळवल्या जातात.",
+
+                footerFeatures:
+                    "थेट बाजार माहिती • बहुभाषिक • मोबाईलसाठी अनुकूल",
+
+                footerCopyright:
+                    "स्मार्ट कृषी बाजार माहिती प्रणाली"
+            },
+
+
+            hi: {
+
+                location:
+                    "📍 कोपरगांव",
+
+                navDashboard:
+                    "डैशबोर्ड",
+
+                navMarket:
+                    "बाज़ार",
+
+                navForecast:
+                    "पूर्वानुमान",
+
+                navDecision:
+                    "स्मार्ट निर्णय",
+
+                heroLabel:
+                    "डेटा आधारित कृषि",
+
+                heroTitle:
+                    "बेहतर बाजार निर्णय.",
+
+                heroTitleSecond:
+                    "बेहतर कृषि आय.",
+
+                heroDescription:
+                    "कोपरगांव के किसानों को अपनी उपज कब, कहाँ और कैसे बेचनी है, इसका निर्णय लेने में मदद करने वाली कृषि बाजार जानकारी।",
+
+                tagMarket:
+                    "📊 बाजार जानकारी",
+
+                tagAI:
+                    "🤖 AI मूल्य पूर्वानुमान",
+
+                tagLive:
+                    "📡 लाइव डेटा",
+
+                selectCrop:
+                    "अपनी फसल चुनें",
+
+                selectCropDescription:
+                    "कोपरगांव की वर्तमान बाजार स्थिति का विश्लेषण करने के लिए फसल चुनें।",
+
+                cropLabel:
+                    "फसल",
+
+                onion:
+                    "🧅 प्याज़",
+
+                wheat:
+                    "🌾 गेहूं",
+
+                analyzeMarket:
+                    "बाज़ार का विश्लेषण करें",
+
+                marketSnapshot:
+                    "बाज़ार की स्थिति",
+
+                marketSnapshotDescription:
+                    "चयनित फसल की वर्तमान बाजार स्थिति।",
+
+                currentPriceLabel:
+                    "वर्तमान भाव",
+
+                perQuintal:
+                    "प्रति क्विंटल",
+
+                marketTrendLabel:
+                    "बाज़ार का रुझान",
+
+                priceMovement:
+                    "कीमत में बदलाव",
+
+                demandLabel:
+                    "मांग",
+
+                marketIndicator:
+                    "वर्तमान बाजार संकेतक",
+
+                forecastTitle:
+                    "AI मूल्य पूर्वानुमान",
+
+                forecastDescription:
+                    "वर्तमान बाजार जानकारी के आधार पर अनुमानित भविष्य की कीमत।",
+
+                expectedFuturePrice:
+                    "अपेक्षित भविष्य की कीमत",
+
+                forecastInitialMessage:
+                    "पूर्वानुमान प्राप्त करने के लिए फसल चुनें और बाजार का विश्लेषण करें।",
+
+                marketComparison:
+                    "बाज़ार तुलना",
+
+                marketComparisonDescription:
+                    "कोपरगांव बाजार की लाइव जानकारी।",
+
+                marketColumn:
+                    "बाज़ार",
+
+                priceColumn:
+                    "कीमत / क्विंटल",
+
+                statusColumn:
+                    "स्थिति",
+
+                kopargaonAPMC:
+                    "📍 कोपरगांव APMC",
+
+                waiting:
+                    "प्रतीक्षा",
+
+                smartSellingDecision:
+                    "स्मार्ट बिक्री निर्णय",
+
+                smartSellingDescription:
+                    "वर्तमान बाजार जानकारी के आधार पर बिक्री के विकल्पों की तुलना करें।",
+
+                sellNow:
+                    "अभी बेचें",
+
+                currentPriceDecision:
+                    "वर्तमान भाव",
+
+                store:
+                    "भंडारण करें",
+
+                estimatedFuturePrice:
+                    "अनुमानित भविष्य की कीमत",
+
+                transport:
+                    "परिवहन",
+
+                estimatedPrice:
+                    "अनुमानित कीमत",
+
+                smartRecommendation:
+                    "स्मार्ट सिफारिश",
+
+                recommendedAction:
+                    "अनुशंसित कार्रवाई",
+
+                analyzeMarketFirst:
+                    "बाज़ार का विश्लेषण करें",
+
+                recommendationInitialMessage:
+                    "सिस्टम बाजार की जानकारी का विश्लेषण करके सिफारिश देगा।",
+
+                liveDataConnection:
+                    "लाइव डेटा कनेक्शन",
+
+                connectionReady:
+                    "लाइव बाजार डेटा से जुड़ने के लिए तैयार।",
+
+                dataSourceDescription:
+                    "बाजार की कीमतें SmartAgri बैकएंड द्वारा data.gov.in / Agmarknet से प्राप्त की जाती हैं।",
+
+                footerFeatures:
+                    "लाइव बाजार डेटा • बहुभाषी • मोबाइल-अनुकूल",
+
+                footerCopyright:
+                    "स्मार्ट कृषि बाजार सूचना प्रणाली"
+            }
+
+        };
+
+
+        // ====================================================
+        // APPLY TRANSLATION
+        // ====================================================
+
+        function applyLanguage(language) {
+
+            const dictionary =
+                translations[language] ||
+                translations.en;
+
+
+            document
+                .querySelectorAll("[data-i18n]")
+                .forEach(function(element) {
+
+                    const key =
+                        element.getAttribute("data-i18n");
+
+                    if (
+                        dictionary[key] !== undefined
+                    ) {
+
+                        element.textContent =
+                            dictionary[key];
+
+                    }
+
+                });
+
+
+            document.documentElement.lang =
+                language === "mr"
+                    ? "mr"
+                    : language === "hi"
+                        ? "hi"
+                        : "en";
+
+
+            localStorage.setItem(
+                "smartagri-language",
+                language
+            );
+
+        }
+
+
+        // ====================================================
+        // LANGUAGE SELECTOR
+        // ====================================================
+
+        const languageSelect =
+            document.getElementById(
+                "languageSelect"
+            );
+
+
+        languageSelect.addEventListener(
+            "change",
+            function() {
+
+                applyLanguage(
+                    this.value
+                );
+
+            }
+        );
+
+
+        // ====================================================
+        // LOAD SAVED LANGUAGE
+        // ====================================================
+
+        const savedLanguage =
+            localStorage.getItem(
+                "smartagri-language"
+            );
+
+
+        if (
+            savedLanguage &&
+            translations[savedLanguage]
+        ) {
+
+            languageSelect.value =
+                savedLanguage;
+
+            applyLanguage(
+                savedLanguage
+            );
+
+        } else {
+
+            applyLanguage("en");
+
+        }
+
+    </script>
+
+
+    <!-- ================= EXISTING APP SCRIPT ================= -->
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
     <script src="script.js"></script>
 
 </body>
