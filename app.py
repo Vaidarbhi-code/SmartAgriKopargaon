@@ -141,48 +141,34 @@ def create_indexes():
     if market_collection is None:
         return
 
-    # Main lookup index.
+    # Existing/simple indexes.
+    # Do not assign conflicting custom names.
     market_collection.create_index(
         [
             ("crop", ASCENDING),
-            ("district", ASCENDING),
+            ("market", ASCENDING),
             ("data_date", DESCENDING),
-        ],
-        name="crop_district_date"
+        ]
     )
 
-    # History queries.
     market_collection.create_index(
         [
             ("crop", ASCENDING),
             ("data_date", DESCENDING),
-        ],
-        name="crop_date"
+        ]
     )
 
-    # Prevent duplicate records.
+    # Unique record index.
     market_collection.create_index(
         [
             ("crop", ASCENDING),
-            ("district", ASCENDING),
+            ("market", ASCENDING),
             ("data_date", ASCENDING),
+            ("variety", ASCENDING),
         ],
         unique=True,
         name="unique_market_record"
     )
-
-
-connect_mongodb()
-
-
-# ============================================================
-# SUPPORTED CROPS
-# ============================================================
-
-SUPPORTED_CROPS = {
-    "onion",
-    "wheat",
-}
 
 
 # ============================================================
