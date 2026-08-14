@@ -1,16 +1,15 @@
 import os
 import sqlite3
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 
 # ============================================================
 # SMARTAGRI KOPARGAON
-# MARKET INTELLIGENCE BACKEND
+# COMPLETE FLASK BACKEND
 # ============================================================
 
 app = Flask(__name__)
@@ -27,13 +26,6 @@ DATABASE = os.environ.get(
     "SMARTAGRI_DATABASE",
     "smartagri.db"
 )
-
-INDIA_TZ = ZoneInfo("Asia/Kolkata")
-
-
-# ============================================================
-# DATA.GOV.IN CONFIGURATION
-# ============================================================
 
 DATA_GOV_API_KEY = os.environ.get(
     "DATA_GOV_API_KEY",
@@ -63,10 +55,9 @@ CROPS = {
             "ONION",
             "Kanda",
             "Kandaa",
-            "कांदा",
-            "कांदा "
+            "कांदा"
         ],
-        "baseline": 2200
+        "default_price": 2200
     },
 
     "wheat": {
@@ -78,41 +69,19 @@ CROPS = {
             "गेहूं",
             "गहू"
         ],
-        "baseline": 2600
+        "default_price": 2600
     }
 }
 
 
 # ============================================================
-# BASELINE PRICES
-# ============================================================
-#
-# These are ONLY used if the application has never recorded
-# a price for the crop and all live sources fail.
-#
-# They are NOT labelled as live market prices.
+# FALLBACK BASELINE
 # ============================================================
 
-BASELINE_PRICES = {
+FALLBACK_PRICES = {
     "onion": 2200,
     "wheat": 2600
 }
-
-
-# ============================================================
-# TIME HELPERS
-# ============================================================
-
-def now_india():
-    return datetime.now(INDIA_TZ)
-
-
-def today_india():
-    return now_india().strftime("%Y-%m-%d")
-
-
-def current_timestamp():
-    return now_india().isoformat()
 
 
 # ============================================================
@@ -120,20 +89,14 @@ def current_timestamp():
 # ============================================================
 
 def get_db():
-    connection = sqlite3.connect(
-        DATABASE,
-        timeout=30
-    )
-
+    connection = sqlite3.connect(DATABASE)
     connection.row_factory = sqlite3.Row
-
     return connection
 
 
 def initialize_database():
 
     connection = get_db()
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -171,20 +134,16 @@ def initialize_database():
         CREATE INDEX IF NOT EXISTS
         idx_market_crop_date
 
-        ON market_prices(
-            crop,
-            data_date
-        )
+        ON market_prices(crop, data_date)
         """
     )
 
     connection.commit()
-
     connection.close()
 
 
 # ============================================================
-# SAVE PRICE
+# DATABASE SAVE
 # ============================================================
 
 def save_market_price(
@@ -199,95 +158,45 @@ def save_market_price(
 ):
 
     connection = get_db()
-
     cursor = connection.cursor()
 
-    now = current_timestamp()
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
 
-    # --------------------------------------------------------
-    # Prevent duplicate records for the same crop/date/source.
-    # --------------------------------------------------------
-
-    existing = cursor.execute(
+    cursor.execute(
         """
-        SELECT id
-        FROM market_prices
-        WHERE crop = ?
-        AND data_date = ?
-        AND source = ?
-        ORDER BY id DESC
-        LIMIT 1
+        INSERT INTO market_prices
+        (
+            crop,
+            market,
+            price,
+            min_price,
+            max_price,
+            modal_price,
+            source,
+            data_date,
+            fetched_at,
+            created_at
+        )
+
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             crop,
+            market,
+            price,
+            min_price,
+            max_price,
+            modal_price,
+            source,
             data_date,
-            source
+            now,
+            now
         )
-    ).fetchone()
-
-    if existing:
-
-        cursor.execute(
-            """
-            UPDATE market_prices
-
-            SET
-                market = ?,
-                price = ?,
-                min_price = ?,
-                max_price = ?,
-                modal_price = ?,
-                fetched_at = ?
-
-            WHERE id = ?
-            """,
-            (
-                market,
-                price,
-                min_price,
-                max_price,
-                modal_price,
-                now,
-                existing["id"]
-            )
-        )
-
-    else:
-
-        cursor.execute(
-            """
-            INSERT INTO market_prices
-            (
-                crop,
-                market,
-                price,
-                min_price,
-                max_price,
-                modal_price,
-                source,
-                data_date,
-                fetched_at,
-                created_at
-            )
-
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                crop,
-                market,
-                price,
-                min_price,
-                max_price,
-                modal_price,
-                source,
-                data_date,
-                now,
-                now
-            )
-        )
+    )
 
     connection.commit()
-
     connection.close()
 
 
@@ -298,20 +207,14 @@ def save_market_price(
 def get_latest_price(crop):
 
     connection = get_db()
-
     cursor = connection.cursor()
 
     row = cursor.execute(
         """
         SELECT *
         FROM market_prices
-
         WHERE crop = ?
-
-        ORDER BY
-            data_date DESC,
-            id DESC
-
+        ORDER BY data_date DESC, id DESC
         LIMIT 1
         """,
         (crop,)
@@ -329,44 +232,29 @@ def get_latest_price(crop):
 # HISTORY
 # ============================================================
 
-def get_price_history(
-    crop,
-    limit=30
-):
+def get_price_history(crop, limit=30):
 
     connection = get_db()
-
     cursor = connection.cursor()
 
     rows = cursor.execute(
         """
         SELECT *
         FROM market_prices
-
         WHERE crop = ?
-
-        ORDER BY
-            data_date DESC,
-            id DESC
-
+        ORDER BY data_date DESC, id DESC
         LIMIT ?
         """,
-        (
-            crop,
-            limit
-        )
+        (crop, limit)
     ).fetchall()
 
     connection.close()
 
-    return [
-        dict(row)
-        for row in rows
-    ]
+    return [dict(row) for row in rows]
 
 
 # ============================================================
-# PREVIOUS DIFFERENT-DAY PRICE
+# PREVIOUS PRICE
 # ============================================================
 
 def get_previous_price(crop):
@@ -379,15 +267,7 @@ def get_previous_price(crop):
     if len(history) < 2:
         return None
 
-    latest_date = history[0]["data_date"]
-
-    for row in history[1:]:
-
-        if row["data_date"] != latest_date:
-
-            return row
-
-    return None
+    return history[1]
 
 
 # ============================================================
@@ -401,7 +281,7 @@ def parse_price(value):
 
     try:
 
-        text = str(value).strip()
+        text = str(value)
 
         text = (
             text
@@ -412,12 +292,7 @@ def parse_price(value):
             .strip()
         )
 
-        number = float(text)
-
-        if number <= 0:
-            return None
-
-        return number
+        return float(text)
 
     except Exception:
 
@@ -432,9 +307,11 @@ def normalize_date(value):
 
     if not value:
 
-        return today_india()
+        return datetime.now(
+            timezone.utc
+        ).strftime("%Y-%m-%d")
 
-    text = str(value).strip()
+    value = str(value).strip()
 
     formats = [
         "%d/%m/%Y",
@@ -442,8 +319,7 @@ def normalize_date(value):
         "%Y-%m-%d",
         "%d/%m/%y",
         "%d-%m-%y",
-        "%Y/%m/%d",
-        "%d.%m.%Y"
+        "%Y/%m/%d"
     ]
 
     for fmt in formats:
@@ -451,7 +327,7 @@ def normalize_date(value):
         try:
 
             parsed = datetime.strptime(
-                text,
+                value,
                 fmt
             )
 
@@ -460,10 +336,11 @@ def normalize_date(value):
             )
 
         except ValueError:
+            continue
 
-            pass
-
-    return today_india()
+    return datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d")
 
 
 # ============================================================
@@ -478,7 +355,7 @@ def crop_matches(
     if not record_crop:
         return False
 
-    record_text = str(
+    record_crop = str(
         record_crop
     ).strip().lower()
 
@@ -491,39 +368,17 @@ def crop_matches(
     if requested_crop not in CROPS:
         return False
 
-    names = CROPS[
+    for name in CROPS[
         requested_crop
-    ]["names"]
+    ]["names"]:
 
-    for name in names:
-
-        name_text = str(
+        if record_crop == str(
             name
-        ).strip().lower()
+        ).strip().lower():
 
-        if record_text == name_text:
             return True
 
-    return requested_crop in record_text
-
-
-# ============================================================
-# FIELD HELPER
-# ============================================================
-
-def first_value(
-    record,
-    keys
-):
-
-    for key in keys:
-
-        value = record.get(key)
-
-        if value is not None:
-            return value
-
-    return None
+    return requested_crop in record_crop
 
 
 # ============================================================
@@ -536,78 +391,51 @@ def parse_government_record(
 ):
 
     modal_price = parse_price(
-        first_value(
-            record,
-            [
-                "modal_price",
-                "Modal_Price",
-                "modal",
-                "Modal Price",
-                "modal price",
-                "price_per_quintal",
-                "Price",
-                "price"
-            ]
-        )
+        record.get("modal_price")
+        or record.get("Modal_Price")
+        or record.get("modal")
+        or record.get("Modal Price")
     )
 
     min_price = parse_price(
-        first_value(
-            record,
-            [
-                "min_price",
-                "Min_Price",
-                "minimum_price",
-                "Minimum_Price",
-                "min"
-            ]
-        )
+        record.get("min_price")
+        or record.get("Min_Price")
+        or record.get("minimum_price")
     )
 
     max_price = parse_price(
-        first_value(
-            record,
-            [
-                "max_price",
-                "Max_Price",
-                "maximum_price",
-                "Maximum_Price",
-                "max"
-            ]
-        )
+        record.get("max_price")
+        or record.get("Max_Price")
+        or record.get("maximum_price")
     )
+
+    if modal_price is None:
+
+        modal_price = parse_price(
+            record.get(
+                "price_per_quintal"
+            )
+            or record.get("Price")
+            or record.get("price")
+        )
 
     if modal_price is None:
         return None
 
     data_date = normalize_date(
-        first_value(
-            record,
-            [
-                "arrival_date",
-                "Arrival_Date",
-                "date",
-                "Date",
-                "price_date",
-                "Price_Date",
-                "reported_date"
-            ]
-        )
+        record.get("arrival_date")
+        or record.get("Arrival_Date")
+        or record.get("date")
+        or record.get("Date")
+        or record.get("price_date")
     )
 
-    market = first_value(
-        record,
-        [
-            "market",
-            "Market",
-            "market_name",
-            "Market_Name",
-            "mandi"
-        ]
+    market = (
+        record.get("market")
+        or record.get("Market")
+        or record.get("market_name")
+        or "Kopargaon"
     )
-
-    if not market:
-        market = "Kopargaon"
 
     return {
 
@@ -639,22 +467,26 @@ def fetch_from_data_gov(crop):
     if not DATA_GOV_API_KEY:
 
         return None, (
-            "Government API key is not configured."
+            "Government API key is not configured"
         )
 
     params = {
 
-        "api-key": DATA_GOV_API_KEY,
+        "api-key":
+            DATA_GOV_API_KEY,
 
-        "format": "json",
+        "format":
+            "json",
 
-        "limit": 5000
+        "limit":
+            1000
+
     }
 
     response = requests.get(
         DATA_GOV_URL,
         params=params,
-        timeout=20
+        timeout=15
     )
 
     response.raise_for_status()
@@ -669,31 +501,26 @@ def fetch_from_data_gov(crop):
     if not records:
 
         return None, (
-            "Government API returned no records."
+            "No records returned by government API"
         )
 
     # --------------------------------------------------------
-    # Exact crop + Kopargaon search
+    # Search Kopargaon + crop
     # --------------------------------------------------------
-
-    matches = []
 
     for record in records:
 
-        commodity = first_value(
-            record,
-            [
-                "commodity",
-                "Commodity",
-                "crop",
-                "Crop",
-                "commodity_name",
-                "Commodity_Name"
-            ]
+        crop_value = (
+            record.get("commodity")
+            or record.get("Commodity")
+            or record.get("crop")
+            or record.get("Crop")
+            or record.get("commodity_name")
+            or ""
         )
 
         if not crop_matches(
-            commodity,
+            crop_value,
             crop
         ):
             continue
@@ -703,137 +530,32 @@ def fetch_from_data_gov(crop):
             .lower()
         )
 
-        if "kopargaon" in record_text:
+        if "kopargaon" not in record_text:
+            continue
 
-            parsed = parse_government_record(
-                record,
-                crop
-            )
-
-            if parsed:
-                matches.append(parsed)
-
-    # --------------------------------------------------------
-    # Pick newest Kopargaon record
-    # --------------------------------------------------------
-
-    if matches:
-
-        matches.sort(
-            key=lambda item:
-                item["data_date"],
-            reverse=True
+        parsed = parse_government_record(
+            record,
+            crop
         )
 
-        return matches[0], None
+        if parsed:
+            return parsed, None
 
     return None, (
-        f"No Kopargaon record was found "
-        f"in the government dataset for "
-        f"{crop}."
+        f"No Kopargaon record found for {crop}"
     )
 
 
 # ============================================================
 # SECONDARY SOURCE
 # ============================================================
-#
-# This intentionally remains disabled until a verified API
-# endpoint is configured.
-#
-# Do NOT invent live prices.
-# ============================================================
 
 def fetch_secondary_source(crop):
 
-    secondary_url = os.environ.get(
-        "SECONDARY_MARKET_API_URL",
-        ""
-    ).strip()
+    # Reserved for a verified secondary
+    # market source later.
 
-    if not secondary_url:
-        return None
-
-    try:
-
-        response = requests.get(
-            secondary_url,
-            params={
-                "crop": crop,
-                "market": "Kopargaon"
-            },
-            timeout=15
-        )
-
-        response.raise_for_status()
-
-        payload = response.json()
-
-        # Expected format:
-        #
-        # {
-        #   "price": 2300,
-        #   "market": "Kopargaon",
-        #   "data_date": "2026-08-14"
-        # }
-
-        price = parse_price(
-            payload.get("price")
-        )
-
-        if price is None:
-            return None
-
-        return {
-
-            "crop": crop,
-
-            "market": payload.get(
-                "market",
-                "Kopargaon"
-            ),
-
-            "price": price,
-
-            "min_price": parse_price(
-                payload.get(
-                    "min_price"
-                )
-            ),
-
-            "max_price": parse_price(
-                payload.get(
-                    "max_price"
-                )
-            ),
-
-            "modal_price": parse_price(
-                payload.get(
-                    "modal_price"
-                )
-            ) or price,
-
-            "data_date": normalize_date(
-                payload.get(
-                    "data_date"
-                )
-            ),
-
-            "source": payload.get(
-                "source",
-                "Secondary market source"
-            )
-
-        }
-
-    except Exception as exc:
-
-        print(
-            "SECONDARY SOURCE ERROR:",
-            repr(exc)
-        )
-
-        return None
+    return None
 
 
 # ============================================================
@@ -842,54 +564,53 @@ def fetch_secondary_source(crop):
 
 def get_market_data(crop):
 
-    crop = crop.lower().strip()
+    crop = (
+        crop
+        .lower()
+        .strip()
+    )
 
     if crop not in CROPS:
 
-        return None, "Unsupported crop."
+        return None, (
+            "Unsupported crop"
+        )
 
-
-    # ========================================================
-    # 1. LIVE GOVERNMENT DATA
-    # ========================================================
+    # --------------------------------------------------------
+    # 1. GOVERNMENT LIVE DATA
+    # --------------------------------------------------------
 
     try:
 
-        live_data, live_error = (
-            fetch_from_data_gov(crop)
+        live_data, error = (
+            fetch_from_data_gov(
+                crop
+            )
         )
 
         if live_data:
 
             save_market_price(
 
-                crop=crop,
+                crop,
 
-                market=live_data[
-                    "market"
-                ],
+                live_data["market"],
 
-                price=live_data[
-                    "price"
-                ],
+                live_data["price"],
 
-                source=live_data[
-                    "source"
-                ],
+                live_data["source"],
 
-                data_date=live_data[
-                    "data_date"
-                ],
+                live_data["data_date"],
 
-                min_price=live_data.get(
+                live_data.get(
                     "min_price"
                 ),
 
-                max_price=live_data.get(
+                live_data.get(
                     "max_price"
                 ),
 
-                modal_price=live_data.get(
+                live_data.get(
                     "modal_price"
                 )
             )
@@ -898,31 +619,24 @@ def get_market_data(crop):
 
                 **live_data,
 
-                "data_status": "live",
+                "data_status":
+                    "live",
 
-                "message": (
-                    "Latest available market "
-                    "price fetched successfully."
-                )
+                "message":
+                    "Latest market price fetched successfully."
 
             }, None
-
-        print(
-            "GOVERNMENT SOURCE:",
-            live_error
-        )
 
     except Exception as exc:
 
         print(
-            "GOVERNMENT API ERROR:",
+            "Government API error:",
             repr(exc)
         )
 
-
-    # ========================================================
+    # --------------------------------------------------------
     # 2. SECONDARY SOURCE
-    # ========================================================
+    # --------------------------------------------------------
 
     try:
 
@@ -936,33 +650,25 @@ def get_market_data(crop):
 
             save_market_price(
 
-                crop=crop,
+                crop,
 
-                market=secondary_data[
-                    "market"
-                ],
+                secondary_data["market"],
 
-                price=secondary_data[
-                    "price"
-                ],
+                secondary_data["price"],
 
-                source=secondary_data[
-                    "source"
-                ],
+                secondary_data["source"],
 
-                data_date=secondary_data[
-                    "data_date"
-                ],
+                secondary_data["data_date"],
 
-                min_price=secondary_data.get(
+                secondary_data.get(
                     "min_price"
                 ),
 
-                max_price=secondary_data.get(
+                secondary_data.get(
                     "max_price"
                 ),
 
-                modal_price=secondary_data.get(
+                secondary_data.get(
                     "modal_price"
                 )
             )
@@ -971,26 +677,24 @@ def get_market_data(crop):
 
                 **secondary_data,
 
-                "data_status": "live",
+                "data_status":
+                    "live",
 
-                "message": (
-                    "Latest available market "
-                    "price fetched successfully."
-                )
+                "message":
+                    "Latest market price fetched successfully."
 
             }, None
 
     except Exception as exc:
 
         print(
-            "SECONDARY API ERROR:",
+            "Secondary API error:",
             repr(exc)
         )
 
-
-    # ========================================================
-    # 3. DATABASE
-    # ========================================================
+    # --------------------------------------------------------
+    # 3. DATABASE FALLBACK
+    # --------------------------------------------------------
 
     latest = get_latest_price(
         crop
@@ -1000,103 +704,106 @@ def get_market_data(crop):
 
         return {
 
-            "crop": crop,
+            "crop":
+                crop,
 
-            "market": latest[
-                "market"
-            ],
+            "market":
+                latest["market"],
 
-            "price": latest[
-                "price"
-            ],
+            "price":
+                latest["price"],
 
-            "min_price": latest[
-                "min_price"
-            ],
+            "min_price":
+                latest["min_price"],
 
-            "max_price": latest[
-                "max_price"
-            ],
+            "max_price":
+                latest["max_price"],
 
-            "modal_price": latest[
-                "modal_price"
-            ],
+            "modal_price":
+                latest["modal_price"],
 
-            "data_date": latest[
-                "data_date"
-            ],
+            "data_date":
+                latest["data_date"],
 
-            "source": latest[
-                "source"
-            ],
+            "source":
+                latest["source"],
 
             "data_status":
-                "recorded",
+                "historical_fallback",
 
-            "message": (
-                "Showing the latest recorded "
-                "market price."
-            )
+            "message":
+                "Showing the latest recorded market price."
 
         }, None
 
+    # --------------------------------------------------------
+    # 4. BASELINE
+    # --------------------------------------------------------
 
-    # ========================================================
-    # 4. INITIAL BASELINE
-    # ========================================================
+    baseline_price = (
+        FALLBACK_PRICES[crop]
+    )
 
-    baseline_price = BASELINE_PRICES[
-        crop
-    ]
-
-    date = today_india()
+    today = datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d")
 
     save_market_price(
 
-        crop=crop,
+        crop,
 
-        market="Kopargaon",
+        "Kopargaon",
 
-        price=baseline_price,
+        baseline_price,
 
-        source="SmartAgri baseline",
+        "SmartAgri baseline",
 
-        data_date=date,
+        today,
 
-        modal_price=baseline_price
+        None,
+
+        None,
+
+        baseline_price
     )
 
     return {
 
-        "crop": crop,
+        "crop":
+            crop,
 
-        "market": "Kopargaon",
+        "market":
+            "Kopargaon",
 
-        "price": baseline_price,
+        "price":
+            baseline_price,
 
-        "min_price": None,
+        "min_price":
+            None,
 
-        "max_price": None,
+        "max_price":
+            None,
 
-        "modal_price": baseline_price,
+        "modal_price":
+            baseline_price,
 
-        "data_date": date,
+        "data_date":
+            today,
 
-        "source": "SmartAgri baseline",
+        "source":
+            "SmartAgri baseline",
 
-        "data_status": "baseline",
+        "data_status":
+            "baseline",
 
-        "message": (
-            "Initial reference price recorded. "
-            "It will be replaced when a newer "
-            "market price becomes available."
-        )
+        "message":
+            "Latest available SmartAgri market baseline."
 
     }, None
 
 
 # ============================================================
-# TREND ANALYSIS
+# TREND
 # ============================================================
 
 def calculate_trend(
@@ -1112,41 +819,33 @@ def calculate_trend(
 
         return {
 
-            "trend": "Stable",
+            "trend":
+                "Stable",
 
-            "change": 0,
+            "change":
+                0,
 
-            "change_percent": 0
-
-        }
-
-    try:
-
-        previous_price = float(
-            previous["price"]
-        )
-
-    except Exception:
-
-        return {
-
-            "trend": "Stable",
-
-            "change": 0,
-
-            "change_percent": 0
+            "change_percent":
+                0
 
         }
+
+    previous_price = float(
+        previous["price"]
+    )
 
     if previous_price <= 0:
 
         return {
 
-            "trend": "Stable",
+            "trend":
+                "Stable",
 
-            "change": 0,
+            "change":
+                0,
 
-            "change_percent": 0
+            "change_percent":
+                0
 
         }
 
@@ -1156,8 +855,8 @@ def calculate_trend(
     )
 
     change_percent = (
-        change
-        / previous_price
+        change /
+        previous_price
     ) * 100
 
     if change_percent > 2:
@@ -1174,17 +873,20 @@ def calculate_trend(
 
     return {
 
-        "trend": trend,
+        "trend":
+            trend,
 
-        "change": round(
-            change,
-            2
-        ),
+        "change":
+            round(
+                change,
+                2
+            ),
 
-        "change_percent": round(
-            change_percent,
-            2
-        )
+        "change_percent":
+            round(
+                change_percent,
+                2
+            )
 
     }
 
@@ -1203,21 +905,11 @@ def calculate_forecast(
         7
     )
 
-    prices = []
-
-    for row in history:
-
-        try:
-
-            value = float(
-                row["price"]
-            )
-
-            if value > 0:
-                prices.append(value)
-
-        except Exception:
-            pass
+    prices = [
+        float(row["price"])
+        for row in history
+        if row["price"] is not None
+    ]
 
     if len(prices) < 2:
 
@@ -1226,34 +918,28 @@ def calculate_forecast(
     else:
 
         average = (
-            sum(prices)
-            / len(prices)
+            sum(prices) /
+            len(prices)
         )
 
         previous = prices[1]
 
         movement = (
-            current_price
-            - previous
+            current_price -
+            previous
         )
 
         forecast = (
-            average
-            + movement * 0.50
+            average +
+            movement * 0.5
         )
 
-    # --------------------------------------------------------
-    # Keep forecast within a reasonable range.
-    # --------------------------------------------------------
-
     minimum = (
-        current_price
-        * 0.75
+        current_price * 0.75
     )
 
     maximum = (
-        current_price
-        * 1.35
+        current_price * 1.35
     )
 
     forecast = max(
@@ -1268,37 +954,27 @@ def calculate_forecast(
         forecast
     )
 
-    if current_price <= 0:
+    forecast_change = (
+        (
+            forecast -
+            current_price
+        )
+        /
+        current_price
+    ) * 100
 
-        change_percent = 0
-
-    else:
-
-        change_percent = (
-            (
-                forecast
-                - current_price
-            )
-            / current_price
-        ) * 100
-
-    change_percent = round(
-        change_percent,
-        2
-    )
-
-    if change_percent > 3:
+    if forecast_change > 3:
 
         message = (
             "Prices may increase based "
-            "on recent recorded movement."
+            "on recent market movement."
         )
 
-    elif change_percent < -3:
+    elif forecast_change < -3:
 
         message = (
             "Prices may weaken based "
-            "on recent recorded movement."
+            "on recent market movement."
         )
 
     else:
@@ -1310,12 +986,17 @@ def calculate_forecast(
 
     return {
 
-        "forecast_price": forecast,
+        "forecast_price":
+            forecast,
 
         "forecast_change_percent":
-            change_percent,
+            round(
+                forecast_change,
+                2
+            ),
 
-        "message": message
+        "message":
+            message
 
     }
 
@@ -1324,9 +1005,7 @@ def calculate_forecast(
 # DEMAND
 # ============================================================
 
-def calculate_demand(
-    trend
-):
+def calculate_demand(trend):
 
     if trend == "Increasing":
         return "High"
@@ -1338,7 +1017,7 @@ def calculate_demand(
 
 
 # ============================================================
-# SMART DECISION
+# DECISION ENGINE
 # ============================================================
 
 def calculate_decision(
@@ -1351,266 +1030,80 @@ def calculate_decision(
 
     store_value = forecast_price
 
-    # Estimated transport deduction.
-    transport_cost = (
-        current_price
-        * 0.05
-    )
-
     transport_value = (
-        current_price
-        - transport_cost
+        current_price * 0.95
     )
 
-    # --------------------------------------------------------
-    # Strong expected increase
-    # --------------------------------------------------------
-
-    if forecast_price > (
+    if (
+        forecast_price >
         current_price * 1.08
     ):
 
         action = "Store"
 
         reason = (
-            "The forecast price is significantly "
-            "higher than the current recorded price. "
-            "Storing may provide a better return if "
-            "storage cost, crop quality and market "
-            "risk are manageable."
+            "The expected future price is "
+            "significantly higher than the "
+            "current price. Storing may provide "
+            "a better return if storage costs "
+            "and crop quality are manageable."
         )
 
-    # --------------------------------------------------------
-    # Current price is already strong
-    # --------------------------------------------------------
-
-    elif current_price >= (
+    elif (
+        current_price >=
         forecast_price * 0.98
     ):
 
         action = "Sell Now"
 
         reason = (
-            "The current recorded price is strong "
+            "The current market price is strong "
             "relative to the expected future price. "
             "Selling now may reduce price risk."
         )
-
-    # --------------------------------------------------------
-    # Increasing trend
-    # --------------------------------------------------------
 
     elif trend == "Increasing":
 
         action = "Store"
 
         reason = (
-            "Recent recorded prices are increasing. "
-            "Holding the crop may provide an opportunity "
-            "for a better price, subject to storage costs "
-            "and market risk."
+            "The recent market trend is increasing. "
+            "Holding the crop may provide an "
+            "opportunity for a better price."
         )
-
-    # --------------------------------------------------------
-    # Default
-    # --------------------------------------------------------
 
     else:
 
         action = "Sell Now"
 
         reason = (
-            "The expected price improvement is not "
-            "large enough to clearly justify waiting."
+            "The expected price improvement is "
+            "not large enough to clearly justify "
+            "waiting."
         )
 
     return {
 
-        "sell_now": round(
-            sell_value
-        ),
-
-        "store": round(
-            store_value
-        ),
-
-        "transport": round(
-            transport_value
-        ),
-
-        "best_action": action,
-
-        "reason": reason
-
-    }
-
-
-# ============================================================
-# BUILD COMPLETE MARKET RESPONSE
-# ============================================================
-
-def build_market_response(
-    crop,
-    market_data
-):
-
-    current_price = float(
-        market_data["price"]
-    )
-
-    trend_data = calculate_trend(
-        crop,
-        current_price
-    )
-
-    forecast_data = calculate_forecast(
-        crop,
-        current_price
-    )
-
-    demand = calculate_demand(
-        trend_data["trend"]
-    )
-
-    decision = calculate_decision(
-
-        current_price,
-
-        forecast_data[
-            "forecast_price"
-        ],
-
-        trend_data[
-            "trend"
-        ]
-    )
-
-    return {
-
-        "success": True,
-
-        "crop": crop,
-
-        "market": market_data[
-            "market"
-        ],
-
-        "current_price": round(
-            current_price
-        ),
-
-        "price": round(
-            current_price
-        ),
-
-        "min_price":
-            market_data.get(
-                "min_price"
-            ),
-
-        "max_price":
-            market_data.get(
-                "max_price"
-            ),
-
-        "modal_price":
-            market_data.get(
-                "modal_price"
-            ),
-
-        "latest_date":
-            market_data[
-                "data_date"
-            ],
-
-        "data_date":
-            market_data[
-                "data_date"
-            ],
-
-        "source":
-            market_data[
-                "source"
-            ],
-
-        "data_status":
-            market_data[
-                "data_status"
-            ],
-
-        "message":
-            market_data[
-                "message"
-            ],
-
-        "trend":
-            trend_data[
-                "trend"
-            ],
-
-        "price_change":
-            trend_data[
-                "change"
-            ],
-
-        "change_percent":
-            trend_data[
-                "change_percent"
-            ],
-
-        "demand":
-            demand,
-
-        "forecast_price":
-            forecast_data[
-                "forecast_price"
-            ],
-
-        "forecast_change_percent":
-            forecast_data[
-                "forecast_change_percent"
-            ],
-
-        "forecast_message":
-            forecast_data[
-                "message"
-            ],
-
         "sell_now":
-            decision[
-                "sell_now"
-            ],
+            round(sell_value),
 
         "store":
-            decision[
-                "store"
-            ],
+            round(store_value),
 
         "transport":
-            decision[
-                "transport"
-            ],
+            round(transport_value),
 
         "best_action":
-            decision[
-                "best_action"
-            ],
+            action,
 
-        "recommendation":
-            decision[
-                "best_action"
-            ],
-
-        "recommendation_reason":
-            decision[
-                "reason"
-            ]
+        "reason":
+            reason
 
     }
 
 
 # ============================================================
-# MARKET API
+# MAIN MARKET API
 # ============================================================
 
 @app.route(
@@ -1628,98 +1121,160 @@ def market_api():
 
         return jsonify({
 
-            "success": False,
+            "success":
+                False,
 
-            "error": (
-                "Supported crops: "
-                "onion, wheat"
-            )
+            "error":
+                "Supported crops: onion, wheat"
 
         }), 400
 
     try:
 
         market_data, error = (
-            get_market_data(crop)
+            get_market_data(
+                crop
+            )
         )
 
-        if market_data:
+        if not market_data:
 
-            return jsonify(
-                build_market_response(
-                    crop,
-                    market_data
-                )
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    error
+
+            }), 200
+
+        current_price = float(
+            market_data["price"]
+        )
+
+        trend_data = (
+            calculate_trend(
+                crop,
+                current_price
             )
+        )
+
+        forecast_data = (
+            calculate_forecast(
+                crop,
+                current_price
+            )
+        )
+
+        demand = calculate_demand(
+            trend_data["trend"]
+        )
+
+        decision = calculate_decision(
+
+            current_price,
+
+            forecast_data[
+                "forecast_price"
+            ],
+
+            trend_data[
+                "trend"
+            ]
+        )
 
         return jsonify({
 
-            "success": True,
+            "success":
+                True,
 
-            "crop": crop,
+            "crop":
+                crop,
 
-            "market": "Kopargaon",
+            "market":
+                market_data["market"],
 
             "current_price":
-                BASELINE_PRICES[crop],
+                round(current_price),
 
             "price":
-                BASELINE_PRICES[crop],
+                round(current_price),
 
-            "latest_date":
-                today_india(),
-
-            "data_date":
-                today_india(),
-
-            "source":
-                "SmartAgri baseline",
-
-            "data_status":
-                "baseline",
-
-            "message":
-                "Showing the latest available reference price.",
-
-            "trend": "Stable",
-
-            "price_change": 0,
-
-            "change_percent": 0,
-
-            "demand": "Stable",
-
-            "forecast_price":
-                BASELINE_PRICES[crop],
-
-            "forecast_change_percent": 0,
-
-            "forecast_message":
-                "Prices are currently estimated to remain stable.",
-
-            "sell_now":
-                BASELINE_PRICES[crop],
-
-            "store":
-                BASELINE_PRICES[crop],
-
-            "transport":
-                round(
-                    BASELINE_PRICES[crop]
-                    * 0.95
+            "min_price":
+                market_data.get(
+                    "min_price"
                 ),
 
+            "max_price":
+                market_data.get(
+                    "max_price"
+                ),
+
+            "modal_price":
+                market_data.get(
+                    "modal_price"
+                ),
+
+            "latest_date":
+                market_data["data_date"],
+
+            "data_date":
+                market_data["data_date"],
+
+            "source":
+                market_data["source"],
+
+            "data_status":
+                market_data["data_status"],
+
+            "message":
+                market_data["message"],
+
+            "trend":
+                trend_data["trend"],
+
+            "price_change":
+                trend_data["change"],
+
+            "change_percent":
+                trend_data["change_percent"],
+
+            "demand":
+                demand,
+
+            "forecast_price":
+                forecast_data[
+                    "forecast_price"
+                ],
+
+            "forecast_change_percent":
+                forecast_data[
+                    "forecast_change_percent"
+                ],
+
+            "forecast_message":
+                forecast_data[
+                    "message"
+                ],
+
+            "sell_now":
+                decision["sell_now"],
+
+            "store":
+                decision["store"],
+
+            "transport":
+                decision["transport"],
+
             "best_action":
-                "Sell Now",
+                decision["best_action"],
 
             "recommendation":
-                "Sell Now",
+                decision["best_action"],
 
             "recommendation_reason":
-                "The system does not yet have enough historical market observations to justify waiting.",
-
-            "fallback_reason":
-                error
+                decision["reason"]
 
         })
 
@@ -1730,147 +1285,144 @@ def market_api():
             repr(exc)
         )
 
-        # ----------------------------------------------------
-        # Last-resort database fallback
-        # ----------------------------------------------------
+        latest = get_latest_price(
+            crop
+        )
 
-        try:
+        if latest:
 
-            latest = get_latest_price(
-                crop
+            current_price = float(
+                latest["price"]
             )
 
-            if latest:
+            trend_data = (
+                calculate_trend(
+                    crop,
+                    current_price
+                )
+            )
 
-                response = build_market_response(
+            forecast_data = (
+                calculate_forecast(
+                    crop,
+                    current_price
+                )
+            )
 
+            decision = (
+                calculate_decision(
+
+                    current_price,
+
+                    forecast_data[
+                        "forecast_price"
+                    ],
+
+                    trend_data[
+                        "trend"
+                    ]
+                )
+            )
+
+            return jsonify({
+
+                "success":
+                    True,
+
+                "crop":
                     crop,
 
-                    {
+                "market":
+                    latest["market"],
 
-                        "crop": crop,
+                "current_price":
+                    round(current_price),
 
-                        "market":
-                            latest["market"],
+                "price":
+                    round(current_price),
 
-                        "price":
-                            latest["price"],
+                "min_price":
+                    latest["min_price"],
 
-                        "min_price":
-                            latest["min_price"],
+                "max_price":
+                    latest["max_price"],
 
-                        "max_price":
-                            latest["max_price"],
+                "modal_price":
+                    latest["modal_price"],
 
-                        "modal_price":
-                            latest["modal_price"],
+                "latest_date":
+                    latest["data_date"],
 
-                        "data_date":
-                            latest["data_date"],
+                "data_date":
+                    latest["data_date"],
 
-                        "source":
-                            latest["source"],
+                "source":
+                    latest["source"],
 
-                        "data_status":
-                            "recorded",
+                "data_status":
+                    "historical_fallback",
 
-                        "message":
-                            "Showing the latest recorded market price."
+                "message":
+                    "Showing the latest recorded market price.",
 
-                    }
+                "trend":
+                    trend_data["trend"],
 
-                )
+                "price_change":
+                    trend_data["change"],
 
-                return jsonify(
-                    response
-                )
+                "change_percent":
+                    trend_data[
+                        "change_percent"
+                    ],
 
-        except Exception as fallback_error:
+                "demand":
+                    calculate_demand(
+                        trend_data["trend"]
+                    ),
 
-            print(
-                "DATABASE FALLBACK ERROR:",
-                repr(fallback_error)
-            )
+                "forecast_price":
+                    forecast_data[
+                        "forecast_price"
+                    ],
 
-        # ----------------------------------------------------
-        # Absolute fallback
-        # ----------------------------------------------------
+                "forecast_change_percent":
+                    forecast_data[
+                        "forecast_change_percent"
+                    ],
 
-        baseline = BASELINE_PRICES[
-            crop
-        ]
+                "forecast_message":
+                    forecast_data["message"],
+
+                "sell_now":
+                    decision["sell_now"],
+
+                "store":
+                    decision["store"],
+
+                "transport":
+                    decision["transport"],
+
+                "best_action":
+                    decision["best_action"],
+
+                "recommendation":
+                    decision["best_action"],
+
+                "recommendation_reason":
+                    decision["reason"]
+
+            })
 
         return jsonify({
 
-            "success": True,
+            "success":
+                False,
 
-            "crop": crop,
+            "error":
+                "Market service temporarily unavailable"
 
-            "market": "Kopargaon",
-
-            "current_price":
-                baseline,
-
-            "price":
-                baseline,
-
-            "latest_date":
-                today_india(),
-
-            "data_date":
-                today_india(),
-
-            "source":
-                "SmartAgri baseline",
-
-            "data_status":
-                "baseline",
-
-            "message":
-                "Showing the latest available reference price.",
-
-            "trend":
-                "Stable",
-
-            "price_change":
-                0,
-
-            "change_percent":
-                0,
-
-            "demand":
-                "Stable",
-
-            "forecast_price":
-                baseline,
-
-            "forecast_change_percent":
-                0,
-
-            "forecast_message":
-                "Prices are currently estimated to remain stable.",
-
-            "sell_now":
-                baseline,
-
-            "store":
-                baseline,
-
-            "transport":
-                round(
-                    baseline * 0.95
-                ),
-
-            "best_action":
-                "Sell Now",
-
-            "recommendation":
-                "Sell Now",
-
-            "recommendation_reason":
-                "The system is using its latest available reference price while the market source is unavailable."
-
-        })
+        }), 200
 
 
 # ============================================================
@@ -1913,10 +1465,11 @@ def market_history():
 
         return jsonify({
 
-            "success": False,
+            "success":
+                False,
 
             "error":
-                "Supported crops: onion, wheat"
+                "Unsupported crop"
 
         }), 400
 
@@ -1927,19 +1480,23 @@ def market_history():
 
     return jsonify({
 
-        "success": True,
+        "success":
+            True,
 
-        "crop": crop,
+        "crop":
+            crop,
 
-        "count": len(history),
+        "count":
+            len(history),
 
-        "history": history
+        "history":
+            history
 
     })
 
 
 # ============================================================
-# STATUS API
+# STATUS
 # ============================================================
 
 @app.route(
@@ -1958,19 +1515,14 @@ def status():
 
     return jsonify({
 
-        "success": True,
+        "success":
+            True,
 
         "service":
             "SmartAgri Kopargaon",
 
         "status":
             "online",
-
-        "timezone":
-            "Asia/Kolkata",
-
-        "today":
-            today_india(),
 
         "database":
             DATABASE,
@@ -1980,19 +1532,22 @@ def status():
                 DATA_GOV_API_KEY
             ),
 
-        "latest": {
+        "latest":
+            {
 
-            "onion": onion,
+                "onion":
+                    onion,
 
-            "wheat": wheat
+                "wheat":
+                    wheat
 
-        }
+            }
 
     })
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
 
 @app.route(
@@ -2007,16 +1562,13 @@ def health():
             "healthy",
 
         "service":
-            "SmartAgri Kopargaon",
-
-        "date":
-            today_india()
+            "SmartAgri Kopargaon"
 
     })
 
 
 # ============================================================
-# HOME
+# FRONTEND
 # ============================================================
 
 @app.route(
@@ -2025,34 +1577,9 @@ def health():
 )
 def home():
 
-    return jsonify({
-
-        "name":
-            "SmartAgri Kopargaon",
-
-        "status":
-            "running",
-
-        "message":
-            "SmartAgri market intelligence backend is running.",
-
-        "endpoints": [
-
-            "/api/market?crop=onion",
-
-            "/api/market?crop=wheat",
-
-            "/api/market/history?crop=onion",
-
-            "/api/market/history?crop=wheat",
-
-            "/api/status",
-
-            "/health"
-
-        ]
-
-    })
+    return render_template(
+        "index.html"
+    )
 
 
 # ============================================================
@@ -2069,7 +1596,7 @@ if __name__ == "__main__":
     )
 
     print(
-        " SmartAgri Kopargaon Backend"
+        " SmartAgri Kopargaon"
     )
 
     print(
@@ -2081,40 +1608,8 @@ if __name__ == "__main__":
     )
 
     print(
-        "Timezone: Asia/Kolkata"
-    )
-
-    print(
-        "Market API:"
-    )
-
-    print(
-        "  /api/market?crop=onion"
-    )
-
-    print(
-        "  /api/market?crop=wheat"
-    )
-
-    print(
-        "History API:"
-    )
-
-    print(
-        "  /api/market/history?crop=onion"
-    )
-
-    print(
-        "  /api/market/history?crop=wheat"
-    )
-
-    print(
-        "Government API configured:",
-        bool(DATA_GOV_API_KEY)
-    )
-
-    print(
-        "=========================================="
+        f"Government API configured: "
+        f"{bool(DATA_GOV_API_KEY)}"
     )
 
     app.run(
